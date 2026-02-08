@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>詹姆·波特主题战斗游戏</title>
+  <style>
+    html,body{height:100%;margin:0;background:#12121a;display:flex;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#fff}
+    #gameWrap { display:flex; flex-direction:column; align-items:center; margin-top:80px; }
+    canvas{background:#062b12;image-rendering:pixelated;border:6px solid rgba(255,255,255,0.04);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+    .hud { margin-top:8px; display:flex; justify-content:center; gap:12px; align-items:center; flex-wrap:wrap; }
+    .bar{background:#222;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:6px}
+    .hpTrack{width:140px;height:12px;background:#333;border-radius:8px;overflow:hidden}
+    .hpInner{height:100%;background:linear-gradient(90deg,#0f0,#0a8);width:100%;}
+    .hpInnerEnemy { height:100%; background:linear-gradient(90deg, #f00, #800); width:100%; }
+    .msg {
+      position:absolute;
+      top:20px;
+      left:50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color:#fff;
+      padding:10px 20px;
+      border-radius:8px;
+      font-size:18px;
+      font-weight:bold;
+      text-align:center;
+      z-index:9999;
+      display:none;
+    }
+    .game-title { text-align:center; font-size:28px; color:#f5f5f5; margin:12px 0; font-weight:bold; letter-spacing:2px; }
+    .controls{font-size:13px;color:#ddd; margin-top:6px}
+    .btns{margin-top:8px;display:flex;gap:8px}
+    .btn{background:#2b6;padding:6px 10px;border-radius:6px;color:#071;font-weight:700;cursor:pointer; user-select:none}
+    .btn.secondary{background:#444;color:#ddd}
+    .statusline{font-size:12px;color:#cfc;margin-top:6px}
+    .leftPanel {
+      position: absolute;
+      left: -190px;
+      top: 20px;
+      width: 170px;
+      pointer-events: none;
+      user-select: none;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      align-items:flex-start;
+    }
+    .leftPanel .bar { padding: 8px; width: 170px; box-sizing: border-box; }
+    .skillPanel {}
+    .skillProgressTrack { width: 120px; height: 10px; background: #2a2a2a; border-radius:6px; overflow:hidden; }
+    .skillProgressInner { height:100%; width:0%; background: linear-gradient(90deg,#6cf,#38a); }
+    .skillLabel { font-size:12px; color:#cfe; }
+    .skillHint { font-size:11px; color:#ddd; margin-top:4px; }
+    .hud .bar.controlsBar { max-width: 760px; }
+  </style>
+</head>
+<body>
+<div id="gameWrap"><br>
+  <h1 class="game-title">詹姆·波特对战斯内普</h1>
+  <div style="position:relative">
+    <canvas id="c" width="600" height="600"></canvas>
+    <div id="message" class="msg" style="display:none"></div>
+
+    <div class="leftPanel" id="leftPanel">
+      <div class="skillPanel">
+        <div class="bar">
+          <div class="skillLabel">群体灭魂（按 M 释放）</div>
+          <div style="height:6px"></div>
+          <div class="skillProgressTrack">
+            <div id="skillProgress" class="skillProgressInner" style="width:0%"></div>
+          </div>
+          <div id="skillText" class="skillHint">击杀：0 / 10</div>
+        </div>
+      </div>
+
+      <!-- 新增：玩家护盾 Protego -->
+      <div class="bar">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="skillLabel">守护魔盾·Protego（按 P ）</div>
+        </div>
+        <div style="height:6px"></div>
+        <div class="skillProgressTrack">
+          <div id="protegoProgress" class="skillProgressInner" style="width:100%"></div>
+        </div>
+        <div id="protegoText" class="skillHint">就绪：按 P 释放</div>
+      </div>
+
+      <div class="bar">
+        <div style="font-size:13px;margin-bottom:6px">玩家生命</div>
+        <div class="hpTrack"><div id="playerHP" class="hpInner" style="width:100%"></div></div>
+        <div style="font-size:12px;margin-top:6px" id="hpText">100 / 100</div>
+      </div>
+
+      <div class="bar">
+        <div style="font-size:13px;margin-bottom:6px">BOSS 生命</div>
+        <div class="hpTrack"><div id="bossHP" class="hpInnerEnemy" style="width:100%"></div></div>
+        <div style="font-size:12px;margin-top:6px" id="bossHpText">— / —</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="hud">
+    <div class="bar controlsBar">
+      <div style="font-size:12px">按键：方向键 / WASD 移动，IJKL 发射（上/下/左/右），发射冷却 0.3s。</div>
+    </div>
+  </div>
+
+  <div class="statusline" id="specialStatus"></div>
+
+  <div class="btns">
+    <div class="btn" id="restartBtn">重新开始</div>
+    <div class="btn secondary" id="continueBtn">打不过</div>
+  </div>
+</div>
+
+<script>
+/* === 配置（含新增技能参数 + 场地视觉配置） === */
+const cellCount = 15;
+const cellSize = 600 / cellCount;
+const HP_BAR_WIDTH = 140;
+
+const CONFIG = {
+  playerMaxHp: 200000,
+  playerDamage: 20,
+  playerMoveMsPerCell: 120,
+  player: {
+    fireCooldownMs: 300,
+    maxActiveBullets: 100
+  },
+  playerShield: {
+    durationMs: 2000,     // 护盾持续 2s
+    cooldownMs: 20000,    // 冷却 20s
+    damageReduction: 0.8  // 减伤比例（80% 减伤 => 实际收到 (1 - 0.8)=20%）
+  },
+  bullet: {
+    speed: 0.45,
+    enemySpeed: 0.28,
+    lifeFrames: 120,
+    homingSteer: 0.3//0.14
+  },
+  boss: {
+    hp: 2000,
+    size: 2,
+    skillMinDelay: 1000,
+    skillMaxDelay: 2500,
+    burst: { count: 10, spread: Math.PI * 2, speed: 0.36, homing:true },
+    dash: { steps: 6, stepInterval: 90, speedCellsPerStep: 1.0, damage: 3 },
+    teleport: { margin:1 },
+    cone: { rays: 10, spread: Math.PI/3, speed: 0.6, damage: 14 },
+    summon: { count: 6, speed: 0.22, life: 240, damage: 12 },
+    shield: { duration: 1400, damageReduction: 0.5 },
+    minion: { minDelay: 5200, maxDelay: 10200, batchMin: 1, batchMax: 5 },
+
+    avada: { speed: 0.36, damage: 4000, life: 160, warnMs: 850, count: 1 },
+    legilimens: { durationMs: 3000 },
+    darkmark: { durationMs: 7000, radius: 1.6, dps: 18 },
+    cruciatus: { durationMs: 2000 },
+  },
+  enemy: {
+    maxCount: 20,
+    hp: 30,
+    contactDamage: 0.1,
+    moveSpeed: 0.05,
+    wanderTurnMs: 900,
+    shooterMoveSpeed: 0.12,
+    fireCooldownMs: 1100,
+    homingFireExtraCd: 300
+  },
+  enemyBulletDamage: 18,
+  playerMeleeDamage: 10,
+
+  arena: {
+    normal: {
+      tileA: '#0b6b1f',
+      tileB: '#0a5b17',
+      bodyBg: '#12121a',
+      canvasBg: '#062b12'
+    },
+    enraged: {
+      tileA: '#4b0f0f',
+      tileB: '#3a0b0b',
+      bodyBg: '#170606',
+      canvasBg: '#220606',
+      overlayColor: '255,60,40'
+    },
+    transitionMs: 1400,
+    pulseIntensity: 0.12
+  }
+};
+
+/* === 状态 === */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const playerHPBar = document.getElementById('playerHP');
+const bossHPBar = document.getElementById('bossHP');
+const hpText = document.getElementById('hpText');
+const bossHpText = document.getElementById('bossHpText');
+const restartBtn = document.getElementById('restartBtn');
+const continueBtn = document.getElementById('continueBtn');
+const specialStatusEl = document.getElementById('specialStatus');
+const skillProgressEl = document.getElementById('skillProgress');
+const skillTextEl = document.getElementById('skillText');
+const protegoProgressEl = document.getElementById('protegoProgress');
+const protegoTextEl = document.getElementById('protegoText');
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function randPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function now(){ return performance.now(); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function gridToPx(gx,gy){ return { x: gx*cellSize + cellSize/2, y: gy*cellSize + cellSize/2 }; }
+
+const state = {
+  player: { x: cellCount-2, y: cellCount-2, animX: cellCount-2, animY: cellCount-2, hp: CONFIG.playerMaxHp, maxHp: CONFIG.playerMaxHp, dir:{x:-1,y:0}, moving:false, moveTarget:null, moveStartAt:0, moveEndAt:0, lastShotAt:0, controlReversedUntil:0, rootedUntil:0, protegoUntil:0, protegoLastUsedAt: -99999999 },
+  bullets: [],
+  particles: [],
+  enemies: [],
+  keys: {},
+  running: true, win:false, lose:false,
+  boss: null,
+  fogs: [],
+  avadaWarnings: [],
+  skill: {
+    kills: 0,
+    requiredKills: 10,
+  },
+  // 新增：大招动画状态
+  ultimate: {
+    active: false,
+    startAt: 0,
+    duration: 2600, // ms
+    seededBurst: false // 防止重复 spawnParticles
+  }
+};
+
+/* === 场地视觉状态 === */
+const arenaVisual = { enraged: false, startAt: 0, duration: CONFIG.arena.transitionMs };
+function arenaProgress(){ if(!arenaVisual.enraged) return 0; const p = clamp((now() - arenaVisual.startAt) / arenaVisual.duration, 0, 1); return p; }
+
+/* 色彩工具 */
+function hexToRgb(hex){ if(!hex) return {r:0,g:0,b:0}; hex = hex.replace('#',''); if(hex.length === 3) hex = hex.split('').map(ch=>ch+ch).join(''); const r = parseInt(hex.substring(0,2),16); const g = parseInt(hex.substring(2,4),16); const b = parseInt(hex.substring(4,6),16); return {r,g,b}; }
+function rgbToHex(rgb){ const r = Math.round(clamp(rgb.r,0,255)); const g = Math.round(clamp(rgb.g,0,255)); const b = Math.round(clamp(rgb.b,0,255)); return '#' + [r,g,b].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function lerp(a,b,t){ return a + (b - a) * t; }
+function lerpColorHex(h1, h2, t){ const c1 = hexToRgb(h1), c2 = hexToRgb(h2); return rgbToHex({ r: lerp(c1.r, c2.r, t), g: lerp(c1.g, c2.g, t), b: lerp(c1.b, c2.b, t) }); }
+
+/* === 资源加载 === */
+let images = {};
+let loadedImgs = 0, totalImgs = 4;
+function loadImg(key, src){ const img = new Image(); img.src = src; img.onload = ()=>{ images[key]=img; loadedImgs++; if(loadedImgs===totalImgs) start(); }; img.onerror = ()=>{ images[key]=null; loadedImgs++; if(loadedImgs===totalImgs) start(); }; }
+loadImg('player','../images/01.png');
+loadImg('boss','../images/04.png');
+loadImg('minion','../images/02.png');
+loadImg('bossEnraged','../images/06.png');
+
+/* === 粒子 / 显示提示 === */
+function spawnParticles(gx, gy, n, speedScale=1, bright=false){
+  const base = typeof gx === 'number' && typeof gy === 'number' && gx <= cellCount ? gridToPx(gx, gy) : {x: gx, y: gy};
+  for(let i=0;i<n;i++){
+    const ang = Math.random()*Math.PI*2;
+    const sp = Math.random()*2*speedScale;
+    state.particles.push({ x: base.x, y: base.y, vx: Math.cos(ang)*sp*0.06, vy: Math.sin(ang)*0.06 - 0.2, life: randInt(12,40), bright });
+  }
+}
+function spawnRing(gx, gy, radius, count=24){
+  const base = gridToPx(gx,gy);
+  for(let i=0;i<count;i++){
+    const ang = (i/count)*Math.PI*2;
+    const r = (radius * cellSize) * (0.9 + Math.random()*0.25);
+    state.particles.push({ x: base.x + Math.cos(ang)*r, y: base.y + Math.sin(ang)*r, vx: Math.cos(ang)*0.02, vy: Math.sin(ang)*0.02, life: 36, bright: true });
+  }
+}
+function showMessageTransient(txt, ms=800){
+  messageEl.textContent = txt;
+  messageEl.style.display = 'block';
+  clearTimeout(messageEl._hideTimer);
+  messageEl._hideTimer = setTimeout(()=>{ messageEl.style.display = 'none'; }, ms);
+}
+
+/* === 音频速率平滑（保留） === */
+let _rampAnim = null;
+function rampAudioTo(targetRate = 2, durationMs = 5000){
+  const audio = document.getElementById('bgm');
+  if(!audio) return;
+  cancelAnimationFrame(_rampAnim);
+  const startRate = audio.playbackRate || 1;
+  const startT = performance.now();
+  function step(t){
+    const elapsed = t - startT;
+    const ratio = Math.min(1, Math.max(0, elapsed / durationMs));
+    audio.playbackRate = startRate + (targetRate - startRate) * ratio;
+    if(ratio < 1){ _rampAnim = requestAnimationFrame(step); } else { _rampAnim = null; }
+  }
+  if(audio.paused){ audio.play().catch(()=>{}); }
+  _rampAnim = requestAnimationFrame(step);
+}
+
+/* === 当Boss进入狂暴时的挂钩处理 === */
+function onBossEnrage(b){
+  showMessageTransient('Boss 进入噬魂狂暴！', 2000);
+  arenaVisual.enraged = true;
+  arenaVisual.startAt = now();
+  rampAudioTo(1.5, 5000);
+  spawnRing(b.x + b.size/2, b.y + b.size/2, Math.max(b.size,1.6), 36);
+}
+
+/* === 玩家输入 === */
+let lastKeyMoveAt = 0;
+const keyRepeatMs = 120;
+function attachEvents(){
+  window.addEventListener('keydown', e=>{
+    const kRaw = e.key;
+    const k = kRaw.toLowerCase();
+    state.keys[k] = true;
+
+    if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
+      tryMoveByKey(k);
+    }
+
+    if(k === 'i' || k === 'k' || k === 'j' || k === 'l'){
+      let dir;
+      if(k === 'i') dir = {x:0,y:-1};
+      if(k === 'k') dir = {x:0,y:1};
+      if(k === 'j') dir = {x:-1,y:0};
+      if(k === 'l') dir = {x:1,y:0};
+      if(now() < state.player.controlReversedUntil){
+        dir = { x: -dir.x, y: -dir.y };
+      }
+      playerShoot(dir);
+      e.preventDefault();
+    }
+
+    if(k === 'm'){
+      tryUseMassSkill();
+      e.preventDefault();
+    }
+
+    if(k === 'p'){
+      tryUseProtego();
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', e=>{
+    state.keys[e.key.toLowerCase()] = false;
+  });
+
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.addEventListener('click', failHandler);
+}
+
+function tryMoveByKey(k){
+  const t = now();
+  if(t < state.player.rootedUntil){
+    showMessageTransient('你被定身，无法移动！', 500);
+    return;
+  }
+  if(state.player.moving && t < state.player.moveEndAt) return;
+  if(t - lastKeyMoveAt < 40) return;
+  lastKeyMoveAt = t;
+  let dx=0, dy=0;
+  if(k==='arrowup'||k==='w') dy=-1;
+  if(k==='arrowdown'||k==='s') dy=1;
+  if(k==='arrowleft'||k==='a') dx=-1;
+  if(k==='arrowright'||k==='d') dx=1;
+  if(dx===0 && dy===0) return;
+
+  if(t < state.player.controlReversedUntil){
+    dx = -dx; dy = -dy;
+  }
+
+  const tx = clamp(state.player.x + dx, 0, cellCount-1);
+  const ty = clamp(state.player.y + dy, 0, cellCount-1);
+  if(tx===state.player.x && ty===state.player.y) return;
+  state.player.moveTarget = {x:tx,y:ty};
+  state.player.moving = true;
+  state.player.moveStartAt = now();
+  state.player.moveEndAt = state.player.moveStartAt + CONFIG.playerMoveMsPerCell;
+  state.player.dir = {x: Math.sign(dx), y: Math.sign(dy)};
+}
+
+/* 玩家发射 */
+function playerShoot(dir){
+  if(!state.running) return;
+  const t = now();
+  if(t - state.player.lastShotAt < CONFIG.player.fireCooldownMs) return;
+  let activePlayerBullets = 0;
+  for(const b of state.bullets) if(b.from === 'player') activePlayerBullets++;
+  if(activePlayerBullets >= CONFIG.player.maxActiveBullets){
+    showMessageTransient('子弹已达上限！', 500);
+    return;
+  }
+  state.player.lastShotAt = t;
+  let d = dir || state.player.dir || {x:0,y:-1};
+  const start = { x: state.player.x + d.x*0.5, y: state.player.y + d.y*0.5 };
+  state.bullets.push({
+    id: uid(), x: start.x, y: start.y, vx: d.x * CONFIG.bullet.speed, vy: d.y * CONFIG.bullet.speed, life: CONFIG.bullet.lifeFrames, from:'player', damage: CONFIG.playerDamage
+  });
+  spawnParticles(state.player.x, state.player.y, 6, 0.6);
+}
+
+/* 新增：尝试使用群体技能（按 M 触发），并触发大招动画 */
+function tryUseMassSkill(){
+  const req = state.skill.requiredKills;
+  if(state.skill.kills < req){
+    showMessageTransient(`技能未充能：击杀 ${state.skill.kills}/${req}`, 900);
+    return;
+  }
+  // consume charges
+  state.skill.kills = 0;
+
+  // 视觉/提示
+  showMessageTransient('群体灭魂：对全场造成 200 点伤害！', 1000);
+
+  // 触发“大招动画”状态
+  state.ultimate.active = true;
+  state.ultimate.startAt = now();
+  state.ultimate.duration = 2600;
+  state.ultimate.seededBurst = false;
+
+  // 对所有小怪造成伤害（伤害立即生效）
+  for(let i = state.enemies.length - 1; i >= 0; i--){
+    const e = state.enemies[i];
+    e.hp -= 200;
+    spawnParticles(e.x, e.y, 12, 1.4, true);
+    if(e.hp <= 0){
+      state.enemies.splice(i, 1);
+    }
+  }
+  // 对 Boss 造成伤害（若存在）
+  if(state.boss){
+    const b = state.boss;
+    const dmgApplied = state.boss.shielded ? Math.max(1, Math.round(200 * (1 - CONFIG.boss.shield.damageReduction))) : 200;
+    b.hp -= dmgApplied;
+    spawnRing(b.x + b.size/2, b.y + b.size/2, Math.max(1.2, b.size), 18);
+    if(b.hp <= 0){ b.hp = 0; state.boss = null; win(); }
+  }
+
+  // 小屏幕闪光
+  flashCanvasOnce();
+  updateSkillUI();
+}
+
+/* 新增：尝试激活 Protego（按 P） */
+function tryUseProtego(){
+  if(!state.running) return;
+  const t = now();
+  const last = state.player.protegoLastUsedAt || -9999999;
+  const cd = CONFIG.playerShield.cooldownMs;
+  if(t < last + cd){
+    const remain = Math.ceil((last + cd - t) / 1000);
+    showMessageTransient(`Protego 冷却中：${remain}s`, 700);
+    return;
+  }
+  // 启动护盾
+  state.player.protegoLastUsedAt = t;
+  state.player.protegoUntil = t + CONFIG.playerShield.durationMs;
+  showMessageTransient('Protego 生效：护盾吸收一半子弹伤害！', 900);
+  // 粒子提示
+  spawnParticles(state.player.x, state.player.y, 20, 1.4, true);
+  updateSkillUI();
+}
+
+/* 画布闪光效果（一次性） */
+function flashCanvasOnce(){
+  const el = canvas;
+  el.style.transition = 'filter 120ms ease';
+  el.style.filter = 'brightness(1.6) saturate(1.1)';
+  setTimeout(()=>{ el.style.filter = ''; el.style.transition = ''; }, 140);
+}
+
+/* 启动 */
+function populateBoss(){
+  const gx = Math.floor((cellCount - CONFIG.boss.size)/2);
+  const gy = Math.floor((cellCount - CONFIG.boss.size)/3);
+  state.boss = createBoss(gx, gy);
+  scheduleNextBossSkill(state.boss);
+}
+function start(){
+  // 初始化 protego 为可用
+  state.player.protegoLastUsedAt = now() - CONFIG.playerShield.cooldownMs;
+  populateBoss();
+  attachEvents();
+  restartBtn.onclick = ()=> location.reload();
+  requestAnimationFrame(loop);
+}
+
+/* 更新技能 UI */
+function updateSkillUI(){
+  // 群体技能进度（旧）
+  const req = state.skill.requiredKills;
+  const pct = clamp(state.skill.kills / req, 0, 1) * 100;
+  if(skillProgressEl) skillProgressEl.style.width = pct + '%';
+  if(skillTextEl) skillTextEl.textContent = `击杀：${state.skill.kills} / ${req}`;
+
+  // Protego 进度/文案
+  const last = state.player.protegoLastUsedAt || 0;
+  const cd = CONFIG.playerShield.cooldownMs;
+  const elapsed = Math.max(0, now() - last);
+  const protegoPct = clamp(elapsed / cd, 0, 1) * 100;
+  if(protegoProgressEl) protegoProgressEl.style.width = protegoPct + '%';
+
+  if(now() < state.player.protegoUntil){
+    const remainMs = Math.ceil((state.player.protegoUntil - now()));
+    protegoTextEl.textContent = `护盾生效：${(remainMs/1000).toFixed(1)}s`;
+  } else if(elapsed < cd){
+    const remain = Math.ceil((cd - elapsed) / 1000);
+    protegoTextEl.textContent = `冷却中：${remain}s`;
+  } else {
+    protegoTextEl.textContent = `就绪：按 P 释放`;
+  }
+}
+
+/* 碰撞 / 伤害 简略保留（详见原始） */
+function applyDamageToPlayer(dmg){
+  state.player.hp -= dmg;
+  spawnParticles(state.player.x, state.player.y, 8, 0.8, true);
+  if(state.player.hp <= 0) { state.player.hp = 0; lose(); }
+}
+function checkBulletHitBoss(bullet, boss){
+  if(!boss) return false;
+  return (bullet.x >= boss.x - 0.3 && bullet.x <= boss.x + boss.size - 0.3 &&
+          bullet.y >= boss.y - 0.3 && bullet.y <= boss.y + boss.size - 0.3);
+}
+function playerOverlapsBoss(player, boss){
+  if(!boss) return false;
+  return (player.x >= boss.x - 0.5 && player.x <= boss.x + boss.size - 0.5 &&
+          player.y >= boss.y - 0.5 && player.y <= boss.y + boss.size - 0.5);
+}
+
+/* 主循环 */
+let last = performance.now();
+function loop(nowTime){
+  const dtMs = Math.min(40, nowTime - last);
+  last = nowTime;
+  if(state.running){ update(dtMs); render(); }
+  if(!state.win && !state.lose) requestAnimationFrame(loop);
+}
+
+/* 更新（含大招状态的超时处理） */
+function update(dtMs){
+  const t = now();
+
+  if(state.keys['arrowup']||state.keys['w']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowup'); }
+  if(state.keys['arrowdown']||state.keys['s']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowdown'); }
+  if(state.keys['arrowleft']||state.keys['a']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowleft'); }
+  if(state.keys['arrowright']||state.keys['d']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowright'); }
+
+  if(state.player.moving && state.player.moveTarget){
+    const start = state.player.moveStartAt;
+    const end = state.player.moveEndAt;
+    const ratio = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    state.player.animX = state.player.x + (state.player.moveTarget.x - state.player.x) * ratio;
+    state.player.animY = state.player.y + (state.player.moveTarget.y - state.player.y) * ratio;
+    if(ratio >= 1){
+      state.player.x = state.player.moveTarget.x;
+      state.player.y = state.player.moveTarget.y;
+      state.player.animX = state.player.x; state.player.animY = state.player.y;
+      state.player.moving = false; state.player.moveTarget = null;
+    }
+  } else {
+    state.player.animX += (state.player.x - state.player.animX) * 0.25;
+    state.player.animY += (state.player.y - state.player.animY) * 0.25;
+  }
+
+  const b = state.boss;
+  if(b){
+    if(!b.enraged && b.hp <= b.maxHp * 0.35){ bossEnterEnrage(b); }
+    if(b.enraged && !b._enrageHandled){ b._enrageHandled = true; try{ onBossEnrage(b); }catch(e){ console.error(e); } }
+    if(b.shielded && now() > b.shieldUntil){ b.shielded = false; showMessageTransient('Boss 护盾消失'); }
+
+    if(b.dashing && b.dashStepsLeft > 0 && t >= b.dashNextStepAt){
+      const stepCells = Math.max(1, Math.round(CONFIG.boss.dash.speedCellsPerStep));
+      for(let s=0;s<stepCells;s++){
+        const nx = clamp(b.x + b.dashDir.x, 0, cellCount - b.size);
+        const ny = clamp(b.y + b.dashDir.y, 0, cellCount - b.size);
+        if(nx === b.x && ny === b.y) break;
+        b.x = nx; b.y = ny;
+      }
+      b.animX += (b.x - b.animX) * 0.6;
+      b.animY += (b.y - b.animY) * 0.6;
+      if(playerOverlapsBoss(state.player, b)){ applyDamageToPlayer(CONFIG.boss.dash.damage + (b.enraged ? 1 : 0)); }
+      b.dashStepsLeft--;
+      b.dashNextStepAt = t + CONFIG.boss.dash.stepInterval;
+      if(b.dashStepsLeft <= 0){ b.dashing = false; }
+    } else {
+      b.animX += (b.x - b.animX) * 0.18;
+      b.animY += (b.y - b.animY) * 0.18;
+    }
+
+    if(t - b.lastSkillAt >= b.nextSkillDelay){ bossDoSkill(b); }
+    bossTrySpawnMinions(b);
+  }
+
+  // avadaWarnings...
+  for(let i = state.avadaWarnings.length - 1; i >= 0; i--){
+    const warn = state.avadaWarnings[i];
+    const remaining = warn.fireAt - now();
+    if(remaining <= 300 && remaining > 0){
+      const px = warn.x + Math.cos(warn.angle) * (Math.max(0, (CONFIG.boss.avada.warnMs - remaining)/CONFIG.boss.avada.warnMs) * (cellCount*0.6));
+      const py = warn.y + Math.sin(warn.angle) * (Math.max(0, (CONFIG.boss.avada.warnMs - remaining)/CONFIG.boss.avada.warnMs) * (cellCount*0.6));
+      spawnParticles(px, py, 2, 0.6, true);
+    }
+    if(now() >= warn.fireAt){
+      fireAvadaWarning(warn);
+      state.avadaWarnings.splice(i,1);
+    }
+  }
+
+  for(let i = state.bullets.length - 1; i >= 0; i--){
+    const bl = state.bullets[i];
+    if(bl.from === 'enemy' && bl.homing){
+      if(Math.floor(performance.now()/120) !== Math.floor((performance.now()-dtMs)/120)){
+        const px = state.player.x, py = state.player.y;
+        const dx = px - bl.x, dy = py - bl.y;
+        const mag = Math.hypot(dx,dy) || 1;
+        const speed = (bl.isMinion ? CONFIG.boss.summon.speed : (bl.avada ? (bl.avadaSpeed || CONFIG.boss.avada.speed) : CONFIG.bullet.enemySpeed));
+        const desiredVx = (dx/mag) * speed;
+        const desiredVy = (dy/mag) * speed;
+        const steer = (bl.homingStrength || CONFIG.bullet.homingSteer);
+        bl.vx += (desiredVx - bl.vx) * steer;
+        bl.vy += (desiredVy - bl.vy) * steer;
+        const s = Math.hypot(bl.vx, bl.vy) || 1;
+        bl.vx = (bl.vx / s) * speed;
+        bl.vy = (bl.vy / s) * speed;
+      }
+    }
+
+    bl.x += bl.vx * (dtMs/16.67);
+    bl.y += bl.vy * (dtMs/16.67);
+    bl.life--;
+    if(bl.life <= 0 || bl.x < -2 || bl.x > cellCount+2 || bl.y < -2 || bl.y > cellCount+2){
+      state.bullets.splice(i,1); continue;
+    }
+
+    if(bl.from === 'player'){
+      if(state.boss && checkBulletHitBoss(bl, state.boss)){
+        const damageApplied = state.boss.shielded ? Math.max(1, Math.round(bl.damage * (1 - CONFIG.boss.shield.damageReduction))) : bl.damage;
+        state.boss.hp -= damageApplied;
+        spawnParticles(bl.x, bl.y, 10, 1.2);
+        state.bullets.splice(i,1);
+        if(state.boss.hp <= 0){ state.boss.hp = 0; state.boss = null; win(); }
+        continue;
+      }
+      let hitEnemyIndex = -1;
+      for(let ei=0; ei<state.enemies.length; ei++){
+        const e = state.enemies[ei];
+        if(Math.hypot(e.x - bl.x, e.y - bl.y) < 0.65){
+          hitEnemyIndex = ei; break;
+        }
+      }
+      if(hitEnemyIndex >= 0){
+        const e = state.enemies[hitEnemyIndex];
+        e.hp -= bl.damage;
+        spawnParticles(e.x, e.y, 8, 1.0, true);
+        state.bullets.splice(i,1);
+        if(e.hp <= 0){
+          state.enemies.splice(hitEnemyIndex,1);
+          state.skill.kills = Math.min(state.skill.requiredKills, state.skill.kills + 1);
+          if(state.skill.kills >= state.skill.requiredKills){ showMessageTransient('技能已充能：按 M 释放！', 900); }
+          updateSkillUI();
+        }
+        continue;
+      }
+    } else {
+      if(Math.hypot(state.player.x - bl.x, state.player.y - bl.y) < 0.75){
+        // 计算是否有 Protego 护盾生效，仅影响子弹伤害（来自敌方的子弹）
+        let dmg = bl.damage;
+        if(now() < state.player.protegoUntil){
+          // CONFIG.playerShield.damageReduction 表示“减伤比例”，boss 的写法里是用 (1 - damageReduction) 来计算实际伤害
+          dmg = Math.max(1, Math.round(dmg * (1 - CONFIG.playerShield.damageReduction)));
+          // 护盾被命中表现
+          spawnParticles(state.player.x, state.player.y, 6, 0.9, true);
+        }
+        applyDamageToPlayer(dmg);
+        spawnParticles(state.player.x, state.player.y, 10, 1.0);
+        state.bullets.splice(i,1);
+        continue;
+      }
+    }
+  }
+
+  for(let ei = state.enemies.length-1; ei >= 0; ei--){
+    const e = state.enemies[ei];
+    let mvx = 0, mvy = 0;
+    const baseMs = (e.type.startsWith('shooter') ? CONFIG.enemy.shooterMoveSpeed : CONFIG.enemy.moveSpeed);
+    const step = baseMs * (dtMs/16.67);
+    if(e.type === 'chaser'){
+      const dx = state.player.x - e.x;
+      const dy = state.player.y - e.y;
+      const dist = Math.hypot(dx,dy) || 1;
+      mvx = (dx/dist) * step;
+      mvy = (dy/dist) * step;
+      e.lastMoveDir = {x: Math.sign(dx)||e.lastMoveDir.x, y: Math.sign(dy)||e.lastMoveDir.y};
+    } else if(e.type === 'wander'){
+      if(now() >= e.nextThinkAt){
+        e.dir = randPick([{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},{x:0,y:0}]);
+        e.nextThinkAt = now() + CONFIG.enemy.wanderTurnMs + randInt(-200,200);
+      }
+      mvx = e.dir.x * step; mvy = e.dir.y * step;
+      e.lastMoveDir = {x: e.dir.x || e.lastMoveDir.x, y: e.dir.y || e.lastMoveDir.y};
+    } else if(e.type === 'shooter_homing' || e.type === 'shooter_straight'){
+      if(e.type === 'shooter_homing'){
+        const dx = state.player.x - e.x;
+        const dy = state.player.y - e.y;
+        const dist = Math.hypot(dx,dy) || 1;
+        mvx = (dx/dist) * step*0.6;
+        mvy = (dy/dist) * step*0.6;
+        e.lastMoveDir = {x: Math.sign(dx)||e.lastMoveDir.x, y: Math.sign(dy)||e.lastMoveDir.y};
+      }else{
+        if(now() >= e.nextThinkAt){
+          e.dir = randPick([{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]);
+          e.nextThinkAt = now() + randInt(800,1400);
+        }
+        mvx = (e.dir?.x||0) * step;
+        mvy = (e.dir?.y||0) * step;
+        e.lastMoveDir = {x: (e.dir?.x||0) || e.lastMoveDir.x, y: (e.dir?.y||0) || e.lastMoveDir.y};
+      }
+    }
+
+    e.x = clamp(e.x + mvx, 0.5, cellCount-0.5);
+    e.y = clamp(e.y + mvy, 0.5, cellCount-0.5);
+    e.animX += (e.x - e.animX) * 0.35;
+    e.animY += (e.y - e.animY) * 0.35;
+
+    if((e.type === 'shooter_homing' || e.type === 'shooter_straight') && now() >= e.nextFireAt){
+      if(e.type === 'shooter_homing'){
+        const speed = CONFIG.bullet.enemySpeed*0.8;
+        const dx = state.player.x - e.x, dy = state.player.y - e.y;
+        const dist = Math.hypot(dx,dy) || 1;
+        state.bullets.push({
+          id: uid(), x: e.x, y: e.y,
+          vx: (dx/dist) * speed * 0.6, vy: (dy/dist) * speed * 0.6,
+          life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing:true
+        });
+        e.nextFireAt = now() + CONFIG.enemy.fireCooldownMs + CONFIG.enemy.homingFireExtraCd + randInt(-150,250);
+      } else {
+        const d = e.lastMoveDir || {x:1,y:0};
+        const vx = d.x * CONFIG.bullet.enemySpeed;
+        const vy = d.y * CONFIG.bullet.enemySpeed;
+        state.bullets.push({
+          id: uid(), x: e.x, y: e.y, vx, vy,
+          life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing:false
+        });
+        e.nextFireAt = now() + CONFIG.enemy.fireCooldownMs + randInt(-150,250);
+      }
+      spawnParticles(e.x, e.y, 5, 0.8);
+    }
+
+    if(Math.hypot(state.player.x - e.x, state.player.y - e.y) < 0.7){
+      applyDamageToPlayer(CONFIG.enemy.contactDamage);
+    }
+  }
+
+  for(let i=state.particles.length-1;i>=0;i--){
+    const p = state.particles[i];
+    p.life--;
+    p.x += p.vx * (dtMs/16.67);
+    p.y += p.vy * (dtMs/16.67);
+    p.vy += 0.01;
+    if(p.life <= 0) state.particles.splice(i,1);
+  }
+
+  for(let i = state.fogs.length - 1; i >= 0; i--){
+    const f = state.fogs[i];
+    if(now() >= f.until){
+      state.fogs.splice(i,1); continue;
+    }
+    const dx = state.player.x - f.x, dy = state.player.y - f.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist <= f.radius){
+      const dmg = CONFIG.boss.darkmark.dps * (dtMs/1000);
+      applyDamageToPlayer(dmg);
+    }
+  }
+
+  // 更新左侧血条
+  playerHPBar.style.width = Math.max(0,(state.player.hp/state.player.maxHp)*HP_BAR_WIDTH) + 'px';
+  hpText.textContent = Math.max(0, Math.round(state.player.hp)) + ' / ' + state.player.maxHp;
+  if(state.boss){
+    bossHPBar.style.width = Math.max(0,(state.boss.hp/state.boss.maxHp)*HP_BAR_WIDTH) + 'px';
+    bossHpText.textContent = Math.max(0, Math.round(state.boss.hp)) + ' / ' + state.boss.maxHp;
+  } else {
+    bossHPBar.style.width = '0px';
+    bossHpText.textContent = '0 / 0';
+  }
+
+  // 状态栏
+  let ss = [];
+  if(now() < state.player.controlReversedUntil) ss.push('摄神取念：操作反转');
+  if(now() < state.player.rootedUntil) ss.push('钻心咒：被定身');
+  if(state.fogs.length) ss.push('黑魔标记：' + state.fogs.length + ' 片黑雾在场');
+  if(state.avadaWarnings.length) ss.push('警告：斯内普正在蓄力 阿瓦达 ('+state.avadaWarnings.length+')');
+  if(state.boss && state.boss.enraged) ss.push('噬魂狂暴：斯内普处于狂暴状态！');
+  if(state.skill.kills >= state.skill.requiredKills) ss.push('技能 READY：按 M 释放');
+  // Protego 状态提示
+  if(now() < state.player.protegoUntil) ss.push('Protego：护盾生效');
+  else if(now() < (state.player.protegoLastUsedAt + CONFIG.playerShield.cooldownMs)) {
+    const remain = Math.ceil((state.player.protegoLastUsedAt + CONFIG.playerShield.cooldownMs - now())/1000);
+    ss.push('Protego 冷却：' + remain + 's');
+  }
+  specialStatusEl.textContent = ss.join('  |  ');
+
+  // 场地颜色过渡
+  const p = arenaProgress();
+  if(p > 0){
+    const bg = lerpColorHex(CONFIG.arena.normal.bodyBg, CONFIG.arena.enraged.bodyBg, p);
+    document.body.style.background = bg;
+  } else {
+    document.body.style.background = CONFIG.arena.normal.bodyBg;
+  }
+
+  // 大招：到时间自动结束并在开始时做一次粒子爆发
+  if(state.ultimate.active){
+    const elapsed = now() - state.ultimate.startAt;
+    if(!state.ultimate.seededBurst){
+      // 一次性强烈粒子与环（在大招开始那一帧）
+      const pos = gridToPx(state.player.animX, state.player.animY);
+      spawnParticles(pos.x, pos.y, 36, 2.2, true);
+      state.ultimate.seededBurst = true;
+    }
+    if(elapsed >= state.ultimate.duration){
+      state.ultimate.active = false;
+      state.ultimate.seededBurst = false;
+    }
+  }
+
+  // 每帧更新技能 UI
+  updateSkillUI();
+}
+
+/* 胜利 / 失败 */
+/* ========== 胜利 / 失败 ========== */
+function win(){
+  state.win = true;
+  showMessage('你赢了！斯内普被击败 🎉');
+  render();
+  state.running = false;
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.textContent = "继续游戏";
+  continueBtn.classList.remove('secondary');
+  continueBtn.addEventListener('click', successHandler);
+}
+function lose(){
+  if(state.lose) return;
+  state.lose = true;
+  showMessage('你被打败了……再试一次');
+  render();
+  state.running = false;
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.textContent = "不玩了";
+  continueBtn.classList.add('secondary');
+  continueBtn.addEventListener('click', failHandler);
+}
+function showMessage(txt){ messageEl.textContent = txt; messageEl.style.display = 'block'; }
+
+function showMessage(txt){ messageEl.textContent = txt; messageEl.style.display = 'block'; }
+function successHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:true, action:"continue" }, "*"); } window.close(); }
+function failHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:false, action:"giveup" }, "*"); } window.close(); }
+
+/* 渲染（在玩家绘制后添加大招特效） */
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const prog = arenaProgress();
+  const tileA = lerpColorHex(CONFIG.arena.normal.tileA, CONFIG.arena.enraged.tileA, prog);
+  const tileB = lerpColorHex(CONFIG.arena.normal.tileB, CONFIG.arena.enraged.tileB, prog);
+
+  for(let i=0;i<cellCount;i++){
+    for(let j=0;j<cellCount;j++){
+      const x = i*cellSize, y = j*cellSize;
+      ctx.fillStyle = ((i+j)%2===0) ? tileA : tileB;
+      ctx.fillRect(x+1, y+1, cellSize-2, cellSize-2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)'; ctx.strokeRect(x+0.5, y+0.5, cellSize, cellSize);
+    }
+  }
+
+  state.fogs.forEach(f => {
+    const center = gridToPx(f.x, f.y);
+    const rpx = f.radius * cellSize;
+    const g = ctx.createRadialGradient(center.x, center.y, rpx*0.2, center.x, center.y, rpx);
+    g.addColorStop(0, 'rgba(10,10,10,0.6)');
+    g.addColorStop(1, 'rgba(0,0,0,0.9)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(center.x, center.y, rpx, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = 'rgba(40,10,40,0.08)';
+    ctx.beginPath(); ctx.arc(center.x, center.y, rpx*1.1, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  state.particles.forEach(p=>{
+    if(p.text){
+      ctx.font = "14px serif";
+      ctx.fillStyle = "rgba(255,255,255," + (p.life/30) + ")";
+      ctx.fillText(p.text, p.x, p.y);
+    } else {
+      ctx.globalAlpha = Math.max(0, p.life/36);
+      ctx.fillStyle = p.bright ? 'rgba(255,240,200,0.95)' : 'rgba(255,255,255,0.9)';
+      ctx.fillRect(p.x-2, p.y-2, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  for(const warn of state.avadaWarnings){
+    const center = gridToPx(warn.x, warn.y);
+    const ang = warn.angle;
+    const maxLen = Math.max(canvas.width, canvas.height) * 0.9;
+    const ex = center.x + Math.cos(ang) * maxLen;
+    const ey = center.y + Math.sin(ang) * maxLen;
+    const remain = Math.max(0, warn.fireAt - now());
+    const total = Math.max(1, CONFIG.boss.avada.warnMs);
+    const pulse = 0.5 + 0.5 * Math.sin((now()/150) * Math.PI * 2);
+    const alpha = clamp(0.12 + (1 - remain/total) * 0.7 + pulse*0.05, 0.12, 0.95);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const grd = ctx.createLinearGradient(center.x, center.y, ex, ey);
+    const colorA = warn.speedMult && warn.speedMult > 1 ? 'rgba(255,80,60,'+alpha+')' : 'rgba(40,220,60,'+alpha+')';
+    grd.addColorStop(0, colorA);
+    grd.addColorStop(0.6, 'rgba(40,180,60,'+(alpha*0.6)+')');
+    grd.addColorStop(1, 'rgba(40,120,40,0.02)');
+    ctx.strokeStyle = grd;
+    ctx.lineWidth = 6 + (1 - remain/total) * 8;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    ctx.beginPath();
+    const ringR = 8 + (1 - remain/total) * 18;
+    ctx.strokeStyle = 'rgba(255,220,160,' + (0.6 + pulse*0.2) + ')';
+    ctx.lineWidth = 3;
+    ctx.arc(center.x + Math.cos(ang) * (cellSize*0.6), center.y + Math.sin(ang) * (cellSize*0.6), ringR, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  state.bullets.forEach(b=>{
+    const px = b.x * cellSize, py = b.y * cellSize;
+    if(b.from === 'player'){
+      ctx.beginPath(); ctx.fillStyle = 'rgba(180,200,255,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    } else if(b.avada){
+      ctx.save();
+      ctx.translate(px, py);
+      const ang = Math.atan2(b.vy, b.vx);
+      ctx.rotate(ang);
+      ctx.globalAlpha = 0.98;
+      const len = 26 + Math.random()*6;
+      const grd = ctx.createLinearGradient(-len,0,len,0);
+      grd.addColorStop(0,'rgba(20,200,60,0.0)');
+      grd.addColorStop(0.15,'rgba(30,230,90,0.95)');
+      grd.addColorStop(0.5,'rgba(255,255,255,0.95)');
+      grd.addColorStop(0.85,'rgba(30,230,90,0.95)');
+      grd.addColorStop(1,'rgba(20,200,60,0.0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(-len, -5, len*2, 10);
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,255,220,0.98)';
+      ctx.arc(0,0,6,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowColor = 'rgba(100,255,120,0.8)';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = 'rgba(80,255,120,0.08)';
+      ctx.fillRect(-len, -12, len*2, 24);
+      ctx.restore();
+    } else if(b.isMinion){
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,220,120,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,180,160,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    }
+    const grad = ctx.createRadialGradient(px, py, 2, px, py, 12);
+    if(b.from === 'player'){ grad.addColorStop(0, 'rgba(200,220,255,1)'); grad.addColorStop(1, 'rgba(80,120,255,0)'); }
+    else if(b.avada){ grad.addColorStop(0, 'rgba(160,255,150,1)'); grad.addColorStop(1, 'rgba(60,140,60,0)'); }
+    else { grad.addColorStop(0, 'rgba(255,200,180,1)'); grad.addColorStop(1, 'rgba(255,80,60,0)'); }
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = (b.from==='player')? '#bbf' : (b.isMinion? '#fb0' : '#f88'); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  if(state.boss){
+    const b = state.boss;
+    const px = b.animX * cellSize, py = b.animY * cellSize;
+    const w = cellSize * b.size, h = cellSize * b.size;
+
+    if(b.enraged){
+      ctx.save();
+      const pulse = 0.6 + 0.4 * Math.sin(now()/180);
+      ctx.globalAlpha = 0.6 * pulse;
+      ctx.fillStyle = 'rgba(255,80,60,0.12)';
+      ctx.beginPath(); ctx.arc(px + w/2, py + h/2, Math.max(w,h)*1.4, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,60,30,0.35)';
+      ctx.lineWidth = 6 * pulse;
+      ctx.beginPath(); ctx.arc(px + w/2, py + h/2, Math.max(w,h)*1.05 + 6*pulse, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+
+    if(b.enraged && images.bossEnraged){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = 'rgba(255,90,60,0.25)';
+      ctx.fillRect(px, py, w, h);
+      ctx.restore();
+      ctx.drawImage(images.bossEnraged, px+2, py+2, w-4, h-4);
+    } else if(images.boss){
+      if(b.enraged){
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = 'rgba(255,90,60,0.25)';
+        ctx.fillRect(px, py, w, h);
+        ctx.restore();
+      }
+      ctx.drawImage(images.boss, px+2, py+2, w-4, h-4);
+    } else {
+      const grad = ctx.createLinearGradient(px, py, px+w, py+h);
+      grad.addColorStop(0, b.enraged ? '#ff6b6b' : '#8b1f1f'); grad.addColorStop(1, b.enraged ? '#8b1f1f' : '#4b0f0f');
+      ctx.fillStyle = grad; ctx.fillRect(px+4, py+4, w-8, h-8);
+    }
+    if(b.shielded){
+      ctx.save();
+      ctx.globalAlpha = 0.65;
+      ctx.strokeStyle = 'rgba(120,200,255,0.9)';
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(px + w/2, py + h/2, Math.max(w,h)*0.9, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#000'; ctx.fillRect(px, py-8, w, 6);
+    ctx.fillStyle = '#e33'; ctx.fillRect(px, py-8, Math.max(0, (b.hp/b.maxHp)*w), 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px sans-serif';
+    ctx.fillText('BOSS', px + 6, py + 14);
+  }
+
+  state.enemies.forEach(e => {
+    const ex = e.animX * cellSize, ey = e.animY * cellSize;
+    const size = cellSize * 0.9;
+    if (images.minion) {
+      ctx.drawImage(images.minion, ex - size/2 + 1, ey - size/2 + 1, size - 2, size - 2);
+    } else {
+      ctx.fillStyle = '#aa3';
+      ctx.fillRect(ex - size/2 + 2, ey - size/2 + 2, size - 4, size - 4);
+    }
+    const barX = ex - size / 2;
+    const barY = ey - size / 2 - 6;
+    const barW = size;
+    const barH = 4;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(barX, barY, barW, barH);
+    const w = clamp((e.hp / e.maxHp) * barW, 0, barW);
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(barX, barY, w, barH);
+    ctx.strokeStyle = '#800';
+    ctx.strokeRect(barX, barY, barW, barH);
+  });
+
+  const ppx = state.player.animX * cellSize, ppy = state.player.animY * cellSize;
+  if(images.player){ ctx.drawImage(images.player, ppx+2, ppy+2, cellSize-4, cellSize-4); }
+  else { ctx.fillStyle='#33a'; ctx.fillRect(ppx+4, ppy+4, cellSize-8, cellSize-8); }
+  ctx.fillStyle='#222'; ctx.fillRect(ppx+3, ppy+3, cellSize-6, 6);
+  ctx.fillStyle='#0a0'; ctx.fillRect(ppx+3, ppy+3, Math.max(0, (state.player.hp/state.player.maxHp)*(cellSize-6)), 6);
+
+  // 如果 Protego 生效，画个护盾环
+  if(now() < state.player.protegoUntil){
+    ctx.save();
+    const centerX = ppx + cellSize/2, centerY = ppy + cellSize/2;
+    const r = cellSize * 0.9;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(120,200,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, r, 0, Math.PI*2);
+    ctx.stroke();
+    // 轻微光晕
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(140,240,255,0.12)';
+    ctx.lineWidth = 20;
+    ctx.arc(centerX, centerY, r+6, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ==== 大招特效绘制 ==== */
+  if(state.ultimate.active){
+    const t0 = state.ultimate.startAt;
+    const elapsed = now() - t0;
+    const dur = state.ultimate.duration;
+    const u = clamp(elapsed / dur, 0, 1);
+    const eased = 1 - Math.pow(1 - u, 3); // ease-out 感觉更柔和
+    const center = { x: ppx + cellSize/2, y: ppy + cellSize/2 };
+
+    // 径向白光（扩散）
+    const maxR = Math.max(canvas.width, canvas.height) * 0.9;
+    const r = cellSize * (1 + eased * 8);
+    const rad = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, r);
+    rad.addColorStop(0.0, `rgba(255,255,255,${0.95 * (1 - u*0.15)})`);
+    rad.addColorStop(0.2, `rgba(255,250,240,${0.55 * (1 - u*0.25)})`);
+    rad.addColorStop(0.5, `rgba(200,230,255,${0.18 * (1 - u*0.35)})`);
+    rad.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 1.0 - Math.pow(u, 1.4);
+    ctx.fillStyle = rad;
+    ctx.beginPath(); ctx.arc(center.x, center.y, r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // 放射光束（若干条，随时间旋转）
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const rays = 12;
+    const baseAngle = now() / 360; // 旋转速度
+    for(let i=0;i<rays;i++){
+      const ang = baseAngle + (i / rays) * Math.PI * 2;
+      const gx = Math.cos(ang), gy = Math.sin(ang);
+      const len = cellSize * (2.4 + eased * 5.0);
+      ctx.beginPath();
+      const w = 6 + (1 - u) * 18;
+      const grad = ctx.createLinearGradient(center.x, center.y, center.x + gx*len, center.y + gy*len);
+      grad.addColorStop(0, `rgba(255,255,255,${0.85 * (1 - u*0.2)})`);
+      grad.addColorStop(0.6, `rgba(200,230,255,${0.22 * (1 - u*0.6)})`);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = w * (0.6 + 0.7 * Math.sin(i + now()/150));
+      ctx.beginPath();
+      ctx.moveTo(center.x + gx * (cellSize*0.6), center.y + gy * (cellSize*0.6));
+      ctx.lineTo(center.x + gx * len, center.y + gy * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 文字：Expecto Patronum（发光并逐渐消失）
+    const textAlpha = clamp(1 - Math.pow(u, 1.2), 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.textAlign = 'center';
+    // 阴影（泛光）
+    ctx.shadowColor = 'rgba(180,230,255,' + (0.9 * textAlpha) + ')';
+    ctx.shadowBlur = 28 * (1 - u*0.2) + 6;
+    ctx.font = `${Math.round(20 + 18 * (1 - u))}px "Georgia", serif`;
+    ctx.fillStyle = `rgba(255,255,255,${0.98 * textAlpha})`;
+    ctx.fillText('Expecto Patronum', center.x, center.y - cellSize*0.9);
+    ctx.restore();
+  }
+
+  // 狂暴叠加层
+  if(prog > 0){
+    const pulse = 0.55 + 0.45 * Math.sin(now() / 160);
+    const alpha = prog * CONFIG.arena.pulseIntensity * pulse;
+    const overlayRgb = CONFIG.arena.enraged.overlayColor;
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = 'rgba(' + overlayRgb + ',' + alpha + ')';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+
+    ctx.save();
+    const vgrad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.2, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.9);
+    vgrad.addColorStop(0, 'rgba(0,0,0,0)');
+    vgrad.addColorStop(1, 'rgba(0,0,0,' + (0.25 * prog) + ')');
+    ctx.fillStyle = vgrad;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }
+}
+
+/* 启动保障 */
+if(totalImgs === 0) start();
+else { setTimeout(()=>{ if(loadedImgs < totalImgs && !state.boss) start(); }, 600); }
+</script>
+
+<!-- 引入外部 boss 技能文件（必须在上面工具函数定义后引入） -->
+<script src="./boss-skills.js"></script>
+<!-- ../musics/Victory.mp3 -->
+<!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Victory.mp3" autoplay loop muted></audio>
+  <script>
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+  <script src="../achievements.js"></script>
+</body>
+</html>

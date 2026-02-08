@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>魔法对战游戏</title>
+<style>
+  body {
+    margin: 0;
+    font-family: "Microsoft YaHei", sans-serif;
+    background: linear-gradient(to right, #1a1a2e, #162447);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 {
+    margin-bottom: 10px;
+    font-size: 36px;
+    color: #ffd700;
+    text-shadow: 0 0 10px #ffcc00;
+  }
+  .hp-bar {
+    width: 300px;
+    height: 25px;
+    background: #555;
+    border-radius: 12px;
+    margin: 10px 0;
+    overflow: hidden;
+  }
+  .hp-fill {
+    height: 100%;
+    background: #ff4d4d;
+    width: 100%;
+    transition: width 0.5s;
+  }
+  .buttons {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  .spell-btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    color: #fff;
+    transition: all 0.3s;
+  }
+  .spell-btn:disabled {
+    background: #888;
+    cursor: not-allowed;
+  }
+  .log {
+    width: 90%;
+    max-width: 500px;
+    height: 150px;
+    background: rgba(0,0,0,0.5);
+    padding: 10px;
+    border-radius: 10px;
+    overflow-y: auto;
+    margin-top: 20px;
+  }
+  .log p {
+    margin: 5px 0;
+  }
+  .restart-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 8px;
+    background: #ff4d4d;
+    border: none;
+    color: #fff;
+    box-shadow: 0 0 10px #ff4d4d;
+    transition: all 0.3s;
+  }
+  .restart-btn:hover {
+    background: #ff1a1a;
+    box-shadow: 0 0 15px #ff1a1a;
+  }
+</style>
+</head>
+<body>
+
+<h1>魔法对战游戏</h1>
+
+<div>你的生命值</div>
+<div class="hp-bar"><div class="hp-fill" id="player-hp"></div></div>
+
+<div>对手生命值</div>
+<div class="hp-bar"><div class="hp-fill" id="ai-hp"></div></div>
+
+<div class="buttons">
+  <button class="spell-btn" id="expelliarmus">Expelliarmus</button>
+  <button class="spell-btn" id="stupefy">Stupefy</button>
+  <button class="spell-btn" id="protego">Protego</button>
+</div>
+
+<div class="log" id="log"></div>
+<button class="restart-btn" id="restart" style="display:none;">重新开始</button>
+
+<script>
+  const playerHPBar = document.getElementById('player-hp');
+  const aiHPBar = document.getElementById('ai-hp');
+  const logEl = document.getElementById('log');
+  const restartBtn = document.getElementById('restart');
+
+  let playerHP = 100;
+  let aiHP = 100;
+  let playerCooldowns = { expelliarmus: 0, stupefy: 0, protego: 0 };
+  let aiCooldowns = { expelliarmus: 0, stupefy: 0, protego: 0 };
+  let playerShield = false;
+  let aiShield = false;
+
+  const spells = {
+    expelliarmus: { damage: 20, cooldown: 3, name: "Expelliarmus" },
+    stupefy: { damage: 30, cooldown: 3, name: "Stupefy" },
+    protego: { damage: 10, cooldown: 3, name: "Protego" },
+  };
+
+  function log(message) {
+    logEl.innerHTML += `<p>${message}</p>`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateHP() {
+    playerHPBar.style.width = `${Math.max(playerHP,0)}%`;
+    aiHPBar.style.width = `${Math.max(aiHP,0)}%`;
+  }
+
+  function endGame(winner) {
+    log(`游戏结束！${winner}胜利！`);
+    document.querySelectorAll('.spell-btn').forEach(btn => btn.disabled = true);
+    restartBtn.style.display = 'block';
+  }
+
+  function reduceCooldowns() {
+    for (let key in playerCooldowns) {
+      if (playerCooldowns[key] > 0) playerCooldowns[key]--;
+    }
+    for (let key in aiCooldowns) {
+      if (aiCooldowns[key] > 0) aiCooldowns[key]--;
+    }
+  }
+
+  function aiChooseSpell() {
+    const available = Object.keys(spells).filter(s => aiCooldowns[s] === 0);
+    return available[Math.floor(Math.random()*available.length)];
+  }
+
+  function applySpell(attacker, defender, spellName, shieldKey) {
+    const spell = spells[spellName];
+    let damage = spell.damage;
+
+    // Protego 格挡效果
+    if (spellName !== 'protego' && defender[shieldKey]) {
+      damage = Math.floor(damage / 2);
+      defender[shieldKey] = false;
+      log(`${defender.name}的护盾格挡了一部分伤害！`);
+    }
+
+    defender.hp -= damage;
+    log(`${attacker.name}使用了${spell.name}，造成${damage}点伤害！`);
+
+    // Protego 反震
+    if (spellName === 'protego') {
+      defender.hp -= Math.floor(damage / 2);
+      log(`${attacker.name}使用护盾反震，对${defender.name}造成${Math.floor(damage/2)}点伤害！`);
+      attacker[shieldKey] = true;
+    }
+
+    updateHP();
+  }
+
+  function playerTurn(spellName) {
+    if (playerCooldowns[spellName] > 0) return;
+
+    applySpell({name:'你', hp:playerHP}, {name:'对手', hp:aiHP, shield:aiShield}, spellName, 'shield');
+    playerCooldowns[spellName] = spells[spellName].cooldown;
+    if (spellName === 'protego') playerShield = true;
+
+    if (aiHP <= 0) return endGame('你');
+
+    reduceCooldowns();
+    setTimeout(aiTurn, 1000);
+  }
+
+  function aiTurn() {
+    const spellName = aiChooseSpell();
+    applySpell({name:'对手', hp:aiHP}, {name:'你', hp:playerHP, shield:playerShield}, spellName, 'shield');
+    aiCooldowns[spellName] = spells[spellName].cooldown;
+    if (spellName === 'protego') aiShield = true;
+
+    if (playerHP <= 0) return endGame('对手');
+
+    reduceCooldowns();
+    updateButtons();
+  }
+
+  function updateButtons() {
+    document.getElementById('expelliarmus').disabled = playerCooldowns.expelliarmus > 0;
+    document.getElementById('stupefy').disabled = playerCooldowns.stupefy > 0;
+    document.getElementById('protego').disabled = playerCooldowns.protego > 0;
+  }
+
+  document.getElementById('expelliarmus').addEventListener('click', () => playerTurn('expelliarmus'));
+  document.getElementById('stupefy').addEventListener('click', () => playerTurn('stupefy'));
+  document.getElementById('protego').addEventListener('click', () => playerTurn('protego'));
+
+  restartBtn.addEventListener('click', () => {
+    playerHP = 100;
+    aiHP = 100;
+    playerCooldowns = { expelliarmus: 0, stupefy: 0, protego: 0 };
+    aiCooldowns = { expelliarmus: 0, stupefy: 0, protego: 0 };
+    playerShield = false;
+    aiShield = false;
+    logEl.innerHTML = '';
+    restartBtn.style.display = 'none';
+    document.querySelectorAll('.spell-btn').forEach(btn => btn.disabled = false);
+    updateHP();
+    updateButtons();
+  });
+
+  updateHP();
+  updateButtons();
+</script>
+
+</body>
+</html>

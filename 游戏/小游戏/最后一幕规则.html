@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>詹姆·波特对战斯内普 — 规则说明</title>
+  <meta name="description" content="詹姆·波特主题战斗游戏 - 斯内普战的规则与背景说明页面。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg-dark: #05060a;
+      --glass-bg: rgba(8,8,12,0.46);
+      --glass-border: rgba(255,255,255,0.06);
+      --accent: #f94e4e;
+      --accent-2: #7ef3c7;
+      --text: #eef2f7;
+      --muted: rgba(238,242,247,0.78);
+      --glass-radius: 16px;
+      --container-w: 760px;
+    }
+
+    html,body{height:100%;margin:0;font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans CJK SC";background-color:var(--bg-dark);color:var(--text)}
+
+    body{
+      background-image: linear-gradient(180deg, rgba(6,6,10,0.48), rgba(6,6,10,0.64)), url('../images/resultbg.png');
+      background-size: cover;
+      background-position: center center;
+      display:flex;align-items:center;justify-content:center;padding:36px;box-sizing:border-box;
+    }
+
+    .container{width:100%;max-width:var(--container-w);margin:0 auto;padding:22px;box-sizing:border-box}
+
+    .card{
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--glass-radius);
+      padding:22px;backdrop-filter: blur(8px) saturate(120%);
+      box-shadow: 0 12px 40px rgba(2,6,12,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+      overflow:hidden;
+    }
+
+    .hero{display:flex;gap:16px;align-items:center;flex-direction:column}
+
+    .logo{width:72px;height:72px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);box-shadow:0 8px 24px rgba(0,0,0,0.6);margin-bottom:10px}
+    .logo img{width:100%;height:100%;object-fit:cover;display:block}
+
+    .hero-text{text-align:center}
+    h1{font-size:20px;margin:0 0 6px 0;letter-spacing:0.6px}
+    .subtitle{font-size:13px;color:var(--muted);margin-bottom:10px}
+
+    /* 闪烁警告 */
+    .warning{
+      color:#ff4d4d;
+      font-weight:900;
+      font-size:22px;
+      background:rgba(255,0,0,0.12);
+      padding:10px 16px;
+      border-radius:12px;
+      border:1px solid rgba(255,0,0,0.3);
+      text-shadow:0 0 8px rgba(255,0,0,0.6);
+      animation: blink 1.2s infinite alternate;
+      margin-bottom:14px;
+    }
+    @keyframes blink {
+      0% { opacity: 1; transform: scale(1);}
+      100% { opacity: 0.6; transform: scale(1.05);}
+    }
+
+    .quick{
+      display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;justify-content:center
+    }
+    .pill{background:linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));padding:8px 12px;border-radius:999px;font-weight:600;font-size:13px;border:1px solid rgba(255,255,255,0.03)}
+
+    .actions{display:flex;gap:12px;align-items:center;justify-content:center;margin-top:16px}
+    a.start-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:12px;font-weight:800;font-size:16px;text-decoration:none;color:#070707;background:linear-gradient(135deg,var(--accent),#ff8a6b);box-shadow:0 12px 40px rgba(249,78,78,0.20);border:1px solid rgba(255,255,255,0.06);transition:transform .14s ease, box-shadow .14s ease, filter .14s ease}
+    a.start-btn:active{transform:translateY(1px)}
+    a.start-btn:hover{filter:brightness(1.03);box-shadow:0 20px 60px rgba(249,78,78,0.24)}
+
+    .hint{font-size:13px;color:var(--muted);}
+
+    .summary{margin-top:18px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+    .summary p{margin:6px 0;font-size:15px}
+    .summary ul{margin:8px 0 0 18px}
+
+    details{margin-top:16px;background:rgba(0,0,0,0.18);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+    details summary{cursor:pointer;font-weight:700}
+    .rules{line-height:1.7;color:var(--muted);margin-top:10px}
+
+    .kbd{display:inline-block;padding:6px 9px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono";font-size:13px}
+
+    footer{margin-top:16px;text-align:center;color:var(--muted);font-size:13px}
+
+    @media (max-width:520px){
+      .hero{flex-direction:column}
+      .logo{width:58px;height:58px}
+      h1{font-size:18px}
+      a.start-btn{padding:12px 18px;font-size:15px}
+    }
+  </style>
+</head>
+<body>
+  <main class="container" role="main">
+    <article class="card" aria-labelledby="title">
+      <header class="hero">
+        <div class="warning">⚠ 小心斯内普的黑魔法！</div>
+        <div class="logo" aria-hidden="true"><img src="../images/05.png" alt="斯内普"></div>
+        <div class="hero-text">
+          <h1 id="title">对战斯内普 — 规则与背景</h1>
+          <div class="subtitle">勇敢迎战斯内普！</div>
+
+          <div class="quick" aria-hidden="true">
+            <span class="pill">目标：击败斯内普</span>
+            <span class="pill">核心技能：I K J L（攻） · M（大招） · P（护盾）</span>
+            <span class="pill">提示：斯内普会在低血量时进入狂暴</span>
+          </div>
+
+          <div class="actions">
+            <a class="start-btn" href="boss最后一幕.html" id="startGame" role="button" aria-label="开始游戏">▶ 开始游戏（Enter）</a>
+            <a class="start-btn" href="boss最后一幕窝囊.html">窝囊模式</a>
+          </div>
+        </div>
+      </header>
+
+      <section class="summary" aria-label="重要摘要">
+        <!-- <p><strong>游戏背景</strong>：你为了守护莉莉，毅然决战斯内普的黑巢。他必须穿越魔咒与陷阱，击败强敌，捍卫心中最重要的人。</p> -->
+        <p><strong>战斗要点</strong>：灵活走位，留意斯内普的技能释放与狂暴阶段。</p>
+        <ul>
+          <li>移动：方向键 / WASD</li>
+          <li>攻击：I（上） K（下） J（左） L（右）；发射冷却约 0.3s</li>
+          <li>特殊：击杀 10 名敌人可释放大招（按 M）造成范围伤害</li>
+          <li>护盾：按 <span class="kbd">P</span> 释放 <strong>守护魔盾 · Protego</strong>，在 2 秒内减少来自敌方子弹的伤害 80%，冷却 20 秒；左侧面板会显示护盾冷却/持续进度。</li>
+        </ul>
+      </section>
+
+      <details>
+        <summary>查看完整规则与背景</summary>
+        <div class="rules">
+          <!-- <p><strong>完整背景</strong>：斯内普们释放禁忌魔法，意图摧毁一切。你挺身而出，只为守护莉莉的安危。你要穿越重重险境，迎击敌人。</p> -->
+
+          <p><strong>核心规则（详述）</strong>：</p>
+          <ul>
+            <li>移动：使用方向键或 WASD 在格子上移动。</li>
+            <li>攻击：按 <span class="kbd">I</span>/<span class="kbd">K</span>/<span class="kbd">J</span>/<span class="kbd">L</span> 发射魔法（上/下/左/右）。发射冷却约 0.3s。</li>
+            <li>大招（群体灭魂）：击杀敌人可为“群体灭魂”充能（击杀 10 名），充能满后按 <span class="kbd">M</span> 释放，对场上敌人造成大量伤害并触发视觉特效。</li>
+            <li>护盾（Protego / 守护魔盾）：按 <span class="kbd">P</span> 激活。效果为：</li>
+            <ul>
+              <li>持续时间：<strong>2 秒</strong>（在此期间，来自敌方子弹的伤害减80%）；</li>
+              <li>冷却：<strong>20 秒</strong>；</li>
+              <li>界面提示：左侧技能栏会显示护盾的冷却与剩余持续时间，状态栏也会提示“Protego：护盾生效/冷却中”。</li>
+            </ul>
+            <li>斯内普技能会对你施加负面状态（定身、控制反转、持续伤害等），注意状态栏提示并适时规避。</li>
+            <li>当斯内普进入 <em>狂暴状态</em> 时，战场会发生色彩与音乐变化，应提高警惕并优先躲避强力技能。</li>
+            <li>存活并击败斯内普即为胜利；若被击败可以重试。</li>
+          </ul>
+        </div>
+      </details>
+    </article>
+  </main>
+
+  <script>
+    document.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){
+        const a = document.getElementById('startGame');
+        if(a) a.click();
+      }
+    });
+
+    document.getElementById('startGame').addEventListener('click', function(e){
+      e.preventDefault();
+      try{
+        document.body.style.transition = 'opacity .45s ease, transform .45s ease';
+        document.body.style.opacity = '0';
+        document.body.style.transform = 'scale(0.995)';
+        setTimeout(() => { window.location.href = this.getAttribute('href'); }, 420);
+      }catch(err){
+        window.location.href = this.getAttribute('href');
+      }
+    });
+  </script>
+</body>
+</html>

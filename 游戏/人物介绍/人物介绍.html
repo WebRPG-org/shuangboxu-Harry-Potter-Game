@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>人物介绍</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background: url("../images/resultbg.png") no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow: hidden;
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #ffd700;
+      text-shadow: 1px 1px 2px #000;
+    }
+    .carousel-container {
+      position: relative;
+      width: 80%;
+      max-width: 800px;
+      perspective: 1200px;
+      overflow: hidden;
+    }
+    .achievements {
+      display: flex;
+      transition: transform 0.6s ease;
+      transform-style: preserve-3d;
+    }
+    .card {
+      flex: 0 0 250px;
+      margin: 0 15px;
+      background: rgba(0,0,0,0.6);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      transform: rotateY(0deg) scale(0.9);
+    }
+    .card.unlocked {
+      border: 2px solid #ffd700;
+    }
+    .card.active {
+      transform: rotateY(0deg) scale(1.1);
+      box-shadow: 0 12px 30px rgba(255, 215, 0, 0.8);
+    }
+    .card.left {
+      transform: rotateY(25deg) scale(0.9);
+    }
+    .card.right {
+      transform: rotateY(-25deg) scale(0.9);
+    }
+    .btn {
+      margin: 10px;
+      padding: 10px 20px;
+      background: #ffd700;
+      color: #141e30;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .nav-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.3);
+      color: #fff;
+      font-size: 24px;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      cursor: pointer;
+      transition: background 0.3s;
+      z-index: 10;
+    }
+    .nav-btn:hover {
+      background: rgba(255,255,255,0.6);
+    }
+    .nav-left { left: 10px; }
+    .nav-right { right: 10px; }
+
+    .detail-btn {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    color: #141e30;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-size: 16px;
+    text-decoration: none; /* 确保像按钮一样 */
+  }
+  .detail-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(255, 215, 0, 0.7);
+  }
+      /* 返回按钮 */
+    .back {
+      position: fixed;
+      top: 20px; left: 20px;
+      background: var(--card);
+      color: var(--accent);
+      padding: 10px 18px;
+      border-radius: 50px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      overflow: hidden;
+      
+    }
+    .back:hover {
+      background: var(--accent);
+      color: #fff;
+      transform: translateX(3px);
+    }
+
+
+
+  </style>
+</head>
+<body>
+  <a href="../reality.html" class="back">← 返回</a>
+  <h1>人物介绍</h1>
+  <div class="carousel-container">
+    <button class="nav-btn nav-left" onclick="prevCard()">❮</button>
+    <div id="characters" class="achievements"></div>
+    <button class="nav-btn nav-right" onclick="nextCard()">❯</button>
+  </div>
+
+
+  <script src="../introduction.js"></script>
+  
+<script>
+const currentUser = localStorage.getItem("currentUser");
+if(!currentUser){
+  alert("请先登录！");
+  window.location.href = "../login-register/login.html";
+}
+
+const userCharacters = JSON.parse(localStorage.getItem("characters") || "{}");
+const unlocked = userCharacters[currentUser] || [];
+
+const container = document.getElementById("characters");
+
+// 创建人物卡片
+allCharacters.forEach((c, index) => {
+  const isUnlocked = unlocked.includes(c.id);
+  const card = document.createElement("div");
+  card.className = "card" + (isUnlocked ? " unlocked" : "");
+  card.innerHTML = `
+    <img src="../images/char${index+1}.png" 
+        alt="${c.name}" 
+        style="width:150px; height:150px; object-fit:cover; border-radius:8px; margin-bottom:10px;">
+    <h3>${c.name}</h3>
+    <p>${c.desc}</p>
+    <p style="color:${isUnlocked ? '#ffd700':'#aaa'}">
+      ${isUnlocked ? "已查看" : "未查看"}
+    </p>
+    <button class="detail-btn" onclick="window.location.href='char.html?id=${index+1}'">
+      查看人物详情
+    </button>
+  `;
+
+  container.appendChild(card);
+});
+
+// 获取 URL 参数 ?focus=xxx
+const urlParams = new URLSearchParams(window.location.search);
+const focusId = parseInt(urlParams.get("focus")) || 1;
+let currentIndex = Math.max(0, focusId - 1); // 数组下标从 0 开始
+
+updateCards();
+
+// 卡片切换函数
+function updateCards(){
+  const cards = document.querySelectorAll(".card");
+  cards.forEach((c, i) => {
+    c.classList.remove("active", "left", "right");
+    if(i === currentIndex) c.classList.add("active");
+    else if(i === currentIndex - 1) c.classList.add("left");
+    else if(i === currentIndex + 1) c.classList.add("right");
+  });
+
+  const containerWidth = document.querySelector(".carousel-container").offsetWidth;
+  const currentCard = cards[currentIndex];
+
+  if(currentCard){
+    const cardCenter = currentCard.offsetLeft + currentCard.offsetWidth / 2;
+    const containerCenter = containerWidth / 2;
+    const offset = containerCenter - cardCenter;
+
+    container.style.transform = `translateX(${offset}px)`;
+  }
+}
+
+function prevCard(){
+  if(currentIndex > 0){
+    currentIndex--;
+    updateCards();
+  }
+}
+function nextCard(){
+  if(currentIndex < container.children.length - 1){
+    currentIndex++;
+    updateCards();
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if(e.key === "ArrowLeft") prevCard();
+  if(e.key === "ArrowRight") nextCard();
+});
+
+
+</script>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Guardians At The Gate.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>

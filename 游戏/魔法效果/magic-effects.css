@@ -1,0 +1,39 @@
+#magicCanvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  z-index: 999;
+}
+
+@keyframes floatRune {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 1;
+    filter: blur(0px);
+  }
+  50% {
+    transform: translateY(-100px) translateX(-20px) scale(1.3);
+    opacity: 0.8;
+    filter: blur(1px);
+  }
+  100% {
+    transform: translateY(-220px) translateX(20px) scale(1.6);
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+.rune {
+  position: fixed;
+  bottom: -50px;
+  font-size: 28px;
+  font-weight: bold;
+  pointer-events: none;
+  z-index: 1000;
+  animation: floatRune 7s linear forwards;
+  user-select: none;
+  text-shadow: 0 0 6px #fff, 0 0 12px #fff;
+}

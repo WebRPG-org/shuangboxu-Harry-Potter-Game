@@ -1,0 +1,68 @@
+/*:
+ * @target MZ
+ * @plugindesc 插入小游戏（最后一幕规则.html），成功后回到当前点位继续游戏（关闭窗口也算失败）
+ * @command StartMiniGame10
+ * @text 最后场景的战斗小游戏
+ * @desc 打开最后一个场景战斗小游戏标签页，成功则继续剧情，失败或直接关闭则给选择
+ */
+
+(() => {
+  PluginManager.registerCommand("MiniGame10", "StartMiniGame10", () => {
+    // 在新标签页打开战斗小游戏（100%窗口）
+    const gameWindow = window.open("../小游戏/最后一幕规则.html", "_blank");
+
+    let resultReceived = false; // 标记是否收到小游戏结果
+
+    // 监听小游戏返回结果
+    function handler(e) {
+      if (!e.data || e.data.type !== "MiniGameResult") return;
+      resultReceived = true;
+
+      if (e.data.success) {
+        // 成功 -> 显示信息并继续游戏
+        $gameMessage.add("⚔️ 你击败了斯莱特林众！勇者无敌！");
+      } else {
+        // 失败 -> 给玩家选择
+        $gameMessage.add("💀 战斗失败了！");
+        $gameMessage.add("要重新挑战吗？");
+        $gameMessage.setChoices(["重新开始", "不干了", "剧情模式"], 0, -1);
+        $gameMessage.setChoiceCallback((n) => {
+          if (n === 0) {
+            // 重新开始小游戏
+            PluginManager.callCommand(this, "MiniGame10", "StartMiniGame10", {});
+          } else if (n === 1) {
+            // 不干了 -> 跳转到 fail7
+            window.location.href = "../失败/fail7.html";
+          } else {
+            // 我尽力了 -> 继续剧情
+            $gameMessage.add("👍 你已经尽力了，继续前进吧！");
+          }
+        });
+      }
+      window.removeEventListener("message", handler);
+    }
+    window.addEventListener("message", handler);
+
+    // 定时检测是否直接关闭了小游戏窗口
+    const checkInterval = setInterval(() => {
+      if (gameWindow.closed) {
+        clearInterval(checkInterval);
+        if (!resultReceived) {
+          // 没有玩游戏就关闭 -> 当作失败
+          $gameMessage.add("⚠️ 你没有完成战斗！");
+          $gameMessage.add("要重新挑战吗？");
+          $gameMessage.setChoices(["重新开始", "不干了", "剧情模式"], 0, -1);
+          $gameMessage.setChoiceCallback((n) => {
+            if (n === 0) {
+              PluginManager.callCommand(this, "MiniGame10", "StartMiniGame10", {});
+            } else if (n === 1) {
+              window.location.href = "../失败/fail7.html";
+            } else {
+              $gameMessage.add("👍 你已经尽力了，继续前进吧！");
+            }
+          });
+        }
+      }
+    }, 500);
+  });
+})();

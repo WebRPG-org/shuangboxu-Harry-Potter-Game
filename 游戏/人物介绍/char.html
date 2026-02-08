@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>人物介绍</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: "KaiTi", "Microsoft YaHei", sans-serif;
+      background: url("../images/bg.jpg") no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+    }
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 30px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: 0.3s;
+      backdrop-filter: blur(4px);
+    }
+    .top-img {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-top: 40px;
+    }
+    .top-img img {
+      width: 250px;
+      height: 250px;
+      border-radius: 16px;
+      border: 6px solid #ffc400;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      object-fit: cover;
+      background: #fff;
+    }
+    .text-box {
+      margin: 20px;
+      padding: 30px;
+      text-align: center;
+      font-size: 24px;
+      line-height: 1.9;
+      color: #fff5f5;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.65);
+      border: 2px solid rgba(255, 150, 150, 0.7);
+      backdrop-filter: blur(8px);
+      
+    }
+    .text-box p:first-child {
+      font-size: 32px;
+      font-weight: bold;
+      color: #ffd369;
+      margin-bottom: 18px;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    }
+    .text-box p {
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- 返回按钮 -->
+  <a class="back-btn" id="backBtn">返回菜单</a>
+
+  <!-- 顶部图片 -->
+  <div class="top-img">
+    <img id="char-img" src="" alt="人物相框">
+  </div>
+
+  <!-- 文本内容 -->
+  <div class="text-box" id="char-desc"></div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" autoplay loop></audio>
+
+<!-- JS逻辑 -->
+<script src="characters.js"></script>
+<script src="../introduction.js"></script> <!-- 引入解锁逻辑 -->
+
+<script>
+  // 获取 URL 参数 ?id=1
+  const urlParams = new URLSearchParams(window.location.search);
+  const charId = parseInt(urlParams.get("id")) || 1;
+
+  // 设置返回按钮链接
+  document.getElementById("backBtn").href = `人物介绍.html?focus=${charId}`;
+
+  // 查找人物（详细信息）
+  const charData = Chara.find(c => c.id === charId);
+
+  if (charData) {
+    // 页面标题
+    document.title = charData.name + " - 人物介绍";
+
+    // 图片
+    document.getElementById("char-img").src = charData.image;
+
+    // 描述（兼容字符串和数组）
+    const descBox = document.getElementById("char-desc");
+    const descArray = Array.isArray(charData.desc) ? charData.desc : [charData.desc];
+    descBox.innerHTML = `<p>${charData.name}</p>` + descArray.map(d => `<p>${d}</p>`).join("");
+
+    // 背景音乐
+    if (charData.music) {
+      const bgm = document.getElementById("bgm");
+      bgm.src = charData.music;
+      bgm.play().catch(()=>{}); // 避免自动播放被阻止报错
+    }
+
+    // 自动解锁（静默，不弹窗）
+    if (typeof unlockCharacter === "function") {
+      unlockCharacter(charId, null); // 使用 introduction.js 的逻辑
+    }
+  } else {
+    document.getElementById("char-desc").innerHTML = "<p>未找到该人物。</p>";
+  }
+</script>
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏成功 - 凤凰社认可</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/fail5.png") no-repeat center center/cover;
+      font-family: "STKaiti", "KaiTi", "Microsoft YaHei", sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 右上角按钮 */
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 中心文字 */
+/* 中心文字容器 */
+.text-box {
+  margin: auto;
+  text-align: center;
+  max-width: 85%;
+  line-height: 1.8;
+  background: rgba(0, 0, 0, 0.45); /* 半透明黑色底框 */
+  padding: 25px 35px;
+  border-radius: 15px;             /* 圆角 */
+  box-shadow: 0 0 20px rgba(0,0,0,0.6); /* 阴影，让底框更立体 */
+}
+
+    .line {
+      margin: 15px 0;
+      opacity: 0;
+    }
+
+    .line1 {
+      font-size: 32px;
+      color: #91ff00;
+      font-weight: bold;
+      text-shadow: 0 0 12px #fff176, 0 0 24px #fbc531;
+      animation: glowIn 2s forwards;
+    }
+    .line2 {
+      font-size: 26px;
+      color: #a6ffcb;
+      animation: fadeUp 2s forwards;
+      animation-delay: 2.5s;
+    }
+    .line3 {
+      font-size: 24px;
+      color: #82ccdd;
+      animation: fadeUp 2s forwards;
+      animation-delay: 4.5s;
+    }
+    .line4 {
+      font-size: 22px;
+      font-style: italic;
+      color: #ffffff;
+      text-shadow: 0 0 6px #48dbfb, 0 0 12px #0abde3;
+      animation: pulse 2s infinite;
+      animation-delay: 7s;
+    }
+
+    /* 动画效果 */
+    @keyframes glowIn {
+      from { opacity: 0; transform: scale(0.7); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(5, '../reality.html')">返回菜单</a>
+
+  <!-- 右上角重新选择 -->
+  <!-- <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(6, '../page.html?page=6')">重新选择（仅测试使用）</a> -->
+
+  <!-- 成功结局文字 -->
+  <div class="text-box">
+    <div class="line line1">（达到邓布利多信任度阈值，获得认可）</div>
+    <div class="line line2">“掠夺者”四人发现在学校反抗黑魔势力能做的有限，</div>
+    <div class="line line3">而这一过程中展现出平等意识、智谋与友善，</div>
+    <div class="line line4">凤凰社向他们伸出橄榄枝，与邓布利多等人继续艰苦卓绝的斗争。</div>
+  </div>
+
+  <!-- 背景音乐（胜利感强的BGM，可以替换） -->
+  <audio id="bgm" src="../musics/Flight of the Order of the Phoenix.mp3" autoplay loop></audio>
+
+  <script src="../achievements.js"></script>
+  <script src="../results.js"></script>
+
+
+<style>
+  /* 烟花容器 */
+  .firework {
+    position: fixed;
+    bottom: 0;
+    width: 4px;
+    height: 10px;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* 烟花粒子 */
+  .particle {
+    position: fixed;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* 爆炸光晕 */
+  .halo {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9997;
+    background: radial-gradient(circle, rgba(255,255,255,0.8), rgba(255,255,255,0));
+  }
+</style>
+
+<script>
+  // 随机颜色（明亮、喜庆的风格）
+  function randomColor() {
+    const colors = ["#FFD700", "#FF4500", "#00FA9A", "#1E90FF", "#FF69B4", "#ADFF2F"];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  // 创建烟花
+  function createFirework() {
+    const firework = document.createElement("div");
+    firework.classList.add("firework");
+    firework.style.left = Math.random() * window.innerWidth + "px";
+    firework.style.bottom = "0px";
+    document.body.appendChild(firework);
+
+    let bottom = 0;
+    const targetHeight = Math.random() * (window.innerHeight * 0.5) + window.innerHeight * 0.3;
+    const speed = Math.random() * 3 + 3;
+
+    function rise() {
+      bottom += speed;
+      firework.style.bottom = bottom + "px";
+
+      if (bottom >= targetHeight) {
+        explode(firework.offsetLeft, window.innerHeight - bottom);
+        firework.remove();
+        return;
+      }
+      requestAnimationFrame(rise);
+    }
+    requestAnimationFrame(rise);
+  }
+
+  // 烟花爆炸
+  function explode(x, y) {
+    // 爆炸光晕
+    createHalo(x, y);
+
+    const particles = 60 + Math.floor(Math.random() * 20); // 增加粒子数量
+
+    for (let i = 0; i < particles; i++) {
+      const particle = document.createElement("div");
+      particle.classList.add("particle");
+      particle.style.left = x + "px";
+      particle.style.top = y + "px";
+      particle.style.background = randomColor();
+      document.body.appendChild(particle);
+
+      // 给每个粒子一个速度（方向+随机大小）
+      let angle = (Math.PI * 2 * i) / particles;
+      let velocity = Math.random() * 6 + 3;
+      let dx = Math.cos(angle) * velocity;
+      let dy = Math.sin(angle) * velocity;
+      let px = x;
+      let py = y;
+      let opacity = 1;
+
+      function spread() {
+        px += dx;
+        py += dy;
+        dy += 0.05; // 模拟重力
+        particle.style.left = px + "px";
+        particle.style.top = py + "px";
+        particle.style.opacity = opacity;
+
+        opacity -= 0.01;
+
+        if (opacity <= 0) {
+          particle.remove();
+          return;
+        }
+        requestAnimationFrame(spread);
+      }
+      requestAnimationFrame(spread);
+    }
+  }
+
+  // 爆炸光晕
+  function createHalo(x, y) {
+    const halo = document.createElement("div");
+    halo.classList.add("halo");
+    halo.style.left = (x - 50) + "px";
+    halo.style.top = (y - 50) + "px";
+    halo.style.width = "100px";
+    halo.style.height = "100px";
+    document.body.appendChild(halo);
+
+    let scale = 1;
+    let opacity = 0.8;
+
+    function expand() {
+      scale += 0.1;
+      opacity -= 0.02;
+      halo.style.transform = `scale(${scale})`;
+      halo.style.opacity = opacity;
+
+      if (opacity <= 0) {
+        halo.remove();
+        return;
+      }
+      requestAnimationFrame(expand);
+    }
+    requestAnimationFrame(expand);
+  }
+
+  // 定时生成烟花
+  setInterval(createFirework, 2000);
+</script>
+
+
+<style>
+  /* 星环 */
+  .ring {
+    position: fixed;
+    border: 2px solid;
+    border-radius: 50%;
+    opacity: 1;
+    transform: scale(0);
+    pointer-events: none;
+    z-index: 9999;
+  }
+</style>
+
+<script>
+  function randomRingColor() {
+    const colors = [
+      "#FFD700", // 金色
+      "#00FFFF", // 青蓝
+      "#FF69B4", // 粉红
+      "#7B68EE", // 魔法紫
+      "#32CD32"  // 绿色
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  // 创建一个扩散的魔法星环
+  function createRing(x, y) {
+    const ring = document.createElement("div");
+    ring.classList.add("ring");
+
+    const color = randomRingColor();
+    ring.style.borderColor = color;
+    ring.style.boxShadow = `0 0 20px ${color}, 0 0 40px ${color}`;
+    ring.style.left = x + "px";
+    ring.style.top = y + "px";
+    ring.style.width = "20px";
+    ring.style.height = "20px";
+    ring.style.marginLeft = "-10px";
+    ring.style.marginTop = "-10px";
+
+    document.body.appendChild(ring);
+
+    let scale = 0;
+    let opacity = 1;
+
+    function expand() {
+      scale += 0.05;
+      opacity -= 0.01;
+
+      ring.style.transform = `scale(${scale})`;
+      ring.style.opacity = opacity;
+
+      if (opacity <= 0) {
+        ring.remove();
+        return;
+      }
+      requestAnimationFrame(expand);
+    }
+    requestAnimationFrame(expand);
+  }
+
+  // 每隔一段时间制造“魔法烟花”
+  function summonMagic() {
+    const x = Math.random() * window.innerWidth;
+    const y = Math.random() * (window.innerHeight * 0.6) + 100;
+
+    // 中心爆点
+    createRing(x, y);
+    setTimeout(() => createRing(x, y), 200);
+    setTimeout(() => createRing(x, y), 400);
+
+    // 小延伸，制造“连环咒语”的感觉
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        createRing(
+          x + (Math.random() * 80 - 40),
+          y + (Math.random() * 80 - 40)
+        );
+      }, 600 + i * 200);
+    }
+  }
+
+  // 定时触发
+  setInterval(summonMagic, 2500);
+</script>
+
+</body>
+</html>

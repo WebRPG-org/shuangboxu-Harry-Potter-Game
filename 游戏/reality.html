@@ -1,0 +1,192 @@
+<!-- reality.html（已修改顶栏样式：灰色半透明，垂直间距更窄） -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>游戏目录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 修改后的顶栏：灰色半透明，垂直更窄 */
+    header {
+      padding: 6px 0; /* 上下窄一点 */
+      background: rgba(60,60,60,0.6); /* 深灰色半透明 */
+      color: #fff;
+      backdrop-filter: blur(6px); /* 玻璃模糊效果（现代浏览器支持） */
+    }
+    .bar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      max-width:1100px;
+      margin:0 auto;
+      padding: 6px 14px; /* 左右略微内间距 */
+      gap: 12px;
+    }
+    .title {
+      font-weight:700;
+      font-size:16px; /* 略微缩小 */
+      letter-spacing: 0.4px;
+    }
+    .auth { display:flex; gap:10px; align-items:center; }
+
+    /* 按钮外观保持原来风格（黄色），在灰色顶栏上对比更明显 */
+    .auth .btn {
+      text-decoration:none;
+      padding:6px 10px;
+      border-radius:6px;
+      background:#ffd700;
+      color:#113366;
+      font-weight:600;
+      box-shadow: none;
+      border: none;
+      display:inline-block;
+    }
+    .auth .btn.small { padding:6px 10px; font-size:13px; border-radius:6px; }
+
+    .auth .user-label { color:#ffd700; font-weight:700; margin-right:8px; }
+
+    /* 登录后区域 */
+    #auth-loggedIn { display:flex; gap:8px; align-items:center; }
+    #auth-loggedIn .logout-btn {
+      padding:6px 10px;
+      border-radius:6px;
+      background:#ff6b6b;
+      color:#fff;
+      border:none;
+      cursor:pointer;
+      font-weight:600;
+    }
+
+    /* 小屏适配 */
+    @media (max-width:600px){
+      .bar { padding:6px 10px; }
+      .title { font-size:15px; }
+      .auth .btn { padding:5px 8px; font-size:12px; }
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="bar">
+    <div class="title">霍格沃茨：掠夺纪年</div>
+    <!-- 登录/注册（包含已登录与未登录两种视图） -->
+    <div class="auth" id="auth">
+      <!-- 未登录视图 -->
+      <div id="auth-loggedOut">
+        <a id="loginLink" class="btn small" href="login-register/login.html?from=reality">登录</a>
+        <a id="registerLink" class="btn small accent" href="login-register/register.html?from=reality">注册</a>
+      </div>
+
+      <!-- 已登录视图（默认隐藏） -->
+      <div id="auth-loggedIn" style="display:none;">
+        <span class="user-label" id="userLabel">已登录：用户名</span>
+        <button id="logoutBtn" class="logout-btn" onclick="logoutFromReality()">退出登录</button>
+      </div>
+    </div>
+  </div>
+</header>
+<main>
+  <!-- 游戏主菜单 -->
+  <section id="routes" class="card">
+    <h3 class="menu-title">主菜单</h3>
+
+    <!-- 大的“开始游戏”方框 -->
+    <div class="route route-big" style="text-align:center;">
+        <h4>
+          <a href="javascript:void(0);" onclick="startGame()">
+            开始游戏
+          </a>
+        </h4>
+      <div class="muted">进入主线剧情，开启魔法之路</div>
+
+      <!-- 其他按钮区域 -->
+      <div class="btn-list" style="margin-top: 24px;">
+        <a class="menu-btn" href="javascript:void(0);" onclick="openBackground()">背景介绍</a>
+        <a class="menu-btn" href="人物介绍/人物介绍.html">人物介绍</a>
+        <a class="menu-btn" href="成就系统/成就.html?from=reality">成就</a>
+        <a class="menu-btn" href="结局系统/结局.html?from=reality">结局</a>
+        <a class="menu-btn" href="彩蛋/index1.html">彩蛋</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 底栏 -->
+<footer>
+  <p class="footer-text">© 2025 霍格沃茨：掠夺纪年</p>
+  <a href="about.html?from=reality" class="footer-link">关于我们</a>
+</footer>
+
+<!-- 背景音乐 -->
+<audio id="bgm" src="musics/Hedwig's Theme.mp3" autoplay loop muted></audio>
+
+<script src="config.js"></script>
+<script src="utils.js"></script>
+<script src="engine.js"></script>
+<script src="main.js"></script>
+<script src="achievements.js"></script>
+
+<script>
+  // 页面加载时根据 localStorage 切换登录状态 UI
+  function updateAuthUI(){
+    const currentUser = localStorage.getItem('currentUser');
+    const loggedOut = document.getElementById('auth-loggedOut');
+    const loggedIn = document.getElementById('auth-loggedIn');
+    const userLabel = document.getElementById('userLabel');
+
+    if(currentUser && currentUser.trim() !== ''){
+      loggedOut.style.display = 'none';
+      loggedIn.style.display = 'flex';
+      userLabel.textContent = `已登录：${currentUser}`;
+    } else {
+      loggedOut.style.display = 'flex';
+      loggedIn.style.display = 'none';
+    }
+  }
+
+  function logoutFromReality(){
+    localStorage.removeItem('currentUser');
+    window.location.href = window.location.pathname + window.location.search; // 刷新同页
+  }
+
+  // 等待页面加载后尝试解除静音播放并更新 UI
+  window.addEventListener("load", function () {
+    const audio = document.getElementById("bgm");
+    setTimeout(() => {
+      audio.muted = false;
+      audio.play().catch(err => {
+        console.log("自动播放被拦截，需手动交互：", err);
+      });
+    }, 500);
+
+    updateAuthUI();
+  });
+
+  function startGame() {
+    const isLoggedIn = !!localStorage.getItem("currentUser");
+    if (isLoggedIn) {
+      unlockAchievement(4, 'Project2/index.html');
+    } else {
+      window.location.href = 'Project2/index.html';
+    }
+  }
+
+  function openBackground() {
+    const isLoggedIn = !!localStorage.getItem("currentUser");
+    if (isLoggedIn) {
+      unlockAchievement(3, 'bgpage.html');
+    } else {
+      window.location.href = 'bgpage.html';
+    }
+  }
+</script>
+
+<!-- 魔法特效 -->
+<canvas id="magicCanvas"></canvas>
+<link rel="stylesheet" href="魔法效果/magic-effects.css">
+<script src="魔法效果/magic-effects.js"></script>
+
+</body>
+</html>

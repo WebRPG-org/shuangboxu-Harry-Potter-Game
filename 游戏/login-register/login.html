@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>登录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
+    }
+
+    main {
+      background-color: rgba(0,0,0,0.7);
+      padding: 40px 30px;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      animation: fadeIn 0.8s ease;
+    }
+
+    h2 {
+      margin-bottom: 24px;
+      font-size: 28px;
+      color: #ffd700;
+      text-shadow: 1px 1px 2px #000;
+    }
+
+    form label {
+      display: block;
+      margin-bottom: 16px;
+      text-align: left;
+      font-size: 16px;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      margin-top: 6px;
+      box-sizing: border-box;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      box-shadow: 0 0 8px #ffd700;
+    }
+
+    button.btn.primary {
+      width: 100%;
+      padding: 12px 0;
+      background-color: #ffd700;
+      color: #1e3c72;
+      font-weight: bold;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s ease;
+    }
+
+    button.btn.primary:hover {
+      background-color: #ffea00;
+      transform: scale(1.03);
+    }
+
+    .btn.small {
+      margin-top: 10px;
+      padding: 8px 16px;
+      background-color: #ffd700;
+      color: #1e3c72;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    p {
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    p a {
+      color: #ffd700;
+      text-decoration: underline;
+    }
+
+    #message {
+      margin-top: 10px;
+      color: #ff6b6b;
+      font-weight: bold;
+    }
+
+    @keyframes fadeIn {
+      from {opacity: 0; transform: translateY(-20px);}
+      to {opacity:1; transform: translateY(0);}
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h2>登录</h2>
+
+  <!-- 登录表单 -->
+  <form id="loginForm">
+    <label>用户名：
+      <input type="text" id="username" placeholder="输入用户名" required>
+    </label>
+    <label>密码：
+      <input type="password" id="password" placeholder="输入密码" required>
+    </label>
+    <button type="submit" class="btn primary">登录</button>
+    <p>还没有账号？ <a href="register.html">去注册</a></p>
+    <p id="message"></p>
+  </form>
+
+  <!-- 已登录状态 -->
+  <div id="loggedInPanel" style="display:none;">
+    <p id="welcome"></p>
+    <button class="btn small" onclick="switchAccount()">切换账号</button>
+    <button class="btn small" onclick="logout()">退出登录</button>
+    <button class="btn small" onclick="window.location.href='../reality.html'">返回</button>
+
+  </div>
+</main>
+
+<script>
+const form = document.getElementById('loginForm');
+const msg = document.getElementById('message');
+const loggedInPanel = document.getElementById('loggedInPanel');
+const welcome = document.getElementById('welcome');
+
+const currentUser = localStorage.getItem('currentUser');
+
+// 如果已有登录用户，显示已登录状态
+if(currentUser){
+  form.style.display = 'none';
+  loggedInPanel.style.display = 'block';
+  welcome.textContent = `已登录：${currentUser}`;
+}
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+
+  const users = JSON.parse(localStorage.getItem('users') || '{}');
+
+  if(users[username] && users[username].password === password){
+    localStorage.setItem('currentUser', username);
+
+    // === 成就系统逻辑 ===
+    let achievements = JSON.parse(localStorage.getItem("achievements") || "{}");
+    if(!achievements[username]) achievements[username] = [];
+    if(!achievements[username].includes(1)){
+      achievements[username].push(1);
+    }
+    localStorage.setItem("achievements", JSON.stringify(achievements));
+    // ==================
+
+    // 跳转
+    const ref = document.referrer;
+    if(ref.includes('index.html')){
+      window.location.href = '../index.html';
+    } else if(ref.includes('reality.html')){
+      window.location.href = '../reality.html';
+    } else {
+      window.location.href = '../reality.html';
+    }
+
+  } else {
+    msg.textContent = '用户名或密码错误';
+  }
+});
+
+function switchAccount(){
+  // 删除当前用户，只刷新页面回到登录表单
+  localStorage.removeItem('currentUser');
+  window.location.reload();
+}
+
+function logout(){
+  // 删除当前用户并跳转回主页
+  localStorage.removeItem('currentUser');
+  window.location.href = '../reality.html';
+}
+</script>
+</body>
+</html>

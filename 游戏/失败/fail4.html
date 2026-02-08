@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏失败5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/fail4.png") no-repeat center center/cover;
+      font-family: "SimHei", "Microsoft YaHei", sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 右上角按钮 */
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 文本框样式 */
+    .text-box {
+      margin: auto;
+      text-align: center;
+      max-width: 80%;
+      line-height: 1.8;
+      padding: 25px;
+      background: rgba(0, 0, 0, 0.65);
+      border-radius: 14px;
+      box-shadow: 0 0 25px rgba(255, 0, 0, 0.5);
+      animation: fadeIn 2s ease;
+    }
+
+    .line {
+      margin: 18px 0;
+      font-size: 26px;
+      color: #ffdddd;
+      opacity: 0;
+      animation: fadeInUp 1.8s forwards;
+      text-shadow: 0 0 10px #ff0000, 0 0 20px #660000;
+    }
+
+    .line1 { animation-delay: 0s; }
+    .line2 { animation-delay: 2s; }
+    .line3 { animation-delay: 4s; }
+    .line4 { animation-delay: 6s; }
+
+    /* 动画：向上浮现 */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px) scale(0.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    /* 撕碎纸张碎片 */
+    .shard {
+      position: absolute;
+      width: 50px;
+      height: 40px;
+      background: #f9f9f9;
+      opacity: 0.85;
+      clip-path: polygon(
+        10% 0%, 90% 5%, 100% 30%, 80% 50%, 
+        90% 80%, 50% 100%, 20% 85%, 0% 40%
+      ); /* 不规则多边形，模拟撕裂边缘 */
+      animation: shardFall linear forwards;
+    }
+
+    @keyframes shardFall {
+      0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(200deg); opacity: 0; }
+    }
+
+    /* 警告符号 ⚠ */
+    .warning {
+      position: absolute;
+      font-size: 40px;
+      color: red;
+      text-shadow: 0 0 12px #ff0000, 0 0 25px #ff4444;
+      opacity: 0;
+      animation: flash 1s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes flash {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(4, '../reality.html')">返回菜单</a>
+
+  <!-- 右上角跳到page.html第6页 -->
+  <!-- <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(5, '../page.html?page=6')">重新选择（仅测试使用）</a> -->
+
+  <!-- 文字内容 -->
+  <div class="text-box">
+    <div class="line line1">秘密被揭发，</div>
+    <div class="line line2">卢平受到排斥与抵触，</div>
+    <div class="line line3">掠夺者四人组因此遭到处罚，</div>
+    <div class="line line4">而活点地图被彻底没收……</div>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+  <!-- 动态效果 -->
+  <script>
+    // 撕碎纸片效果
+    function createShard() {
+      const shard = document.createElement("div");
+      shard.classList.add("shard");
+      shard.style.left = Math.random() * window.innerWidth + "px";
+      shard.style.animationDuration = (3 + Math.random() * 3) + "s";
+      document.body.appendChild(shard);
+      setTimeout(() => shard.remove(), 6000);
+    }
+    setInterval(createShard, 500);
+
+    // 随机生成闪烁警告符号
+    function createWarning() {
+      const warn = document.createElement("div");
+      warn.classList.add("warning");
+      warn.innerText = "⚠";
+      warn.style.left = Math.random() * (window.innerWidth - 50) + "px";
+      warn.style.top = Math.random() * (window.innerHeight - 50) + "px";
+      warn.style.animationDuration = (0.8 + Math.random() * 0.6) + "s";
+      document.body.appendChild(warn);
+      setTimeout(() => warn.remove(), 3000);
+    }
+    setInterval(createWarning, 2000);
+  </script>
+
+  <script src="../achievements.js"></script>
+  <script src="../results.js"></script>
+
+</body>
+</html>

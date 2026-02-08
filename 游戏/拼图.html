@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>拼图华容道</title>
+  <style>
+    :root{
+      --board-size: min(90vmin, 480px);
+      --gap: 6px;
+      --cols: 3;
+      --rows: 3;
+      --tile-radius: 14px;
+      --tile-shadow: 0 6px 16px rgba(0,0,0,.18);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background:#111 url("images/game1.jpg") center/cover no-repeat;
+      min-height:100vh;
+      display:grid; place-items:center;
+      padding:18px;
+    }
+    .app{ display:grid; place-items:center; gap:18px; background:rgba(255,255,255,.3); padding:20px; border-radius:20px; backdrop-filter:blur(6px); }
+
+    .description{
+      font-size:16px; font-weight:600; text-align:center; margin-bottom:10px; color:#111;
+    }
+
+    .board{
+      width:var(--board-size); height:var(--board-size);
+      display:grid; grid-template-columns: repeat(var(--cols), 1fr);
+      grid-template-rows: repeat(var(--rows), 1fr);
+      gap:var(--gap); padding:var(--gap);
+      background: rgba(255,255,255,.25);
+      border-radius: 20px; 
+      box-shadow: 0 10px 20px rgba(0,0,0,.25) inset, 0 6px 20px rgba(0,0,0,.25);
+      position:relative;
+    }
+    .tile{
+      position:relative; display:grid; place-items:center; 
+      user-select:none; cursor:pointer;
+      border-radius: var(--tile-radius);
+      background-size: 300% 300%;
+      background-repeat: no-repeat; background-color:#fff;
+      box-shadow: var(--tile-shadow);
+      transition: transform .12s ease, box-shadow .2s ease;
+      overflow:hidden;
+    }
+    .tile:active{ transform: scale(.96); }
+    .tile-label{
+      position:absolute; bottom:6px; right:8px;
+      font-weight:700; font-size:14px;
+      line-height:1; color:#111;
+      background: rgba(255,255,255,.6);
+      padding:2px 6px; border-radius:6px;
+      opacity:.75;
+    }
+    .blank{ visibility:hidden; pointer-events:none; box-shadow:none; }
+
+    .panel{
+      text-align:center; color:#111; font-weight:600;
+    }
+    .stats{ display:flex; gap:14px; justify-content:center; margin:8px 0; }
+    button{
+      appearance:none; border:none;
+      background:#2563eb; color:#fff;
+      padding:8px 14px; border-radius:12px;
+      font-weight:600; cursor:pointer;
+      box-shadow: 0 6px 14px rgba(0,0,0,.25);
+      margin:4px;
+    }
+    button:hover{ background:#1d4ed8; }
+
+    #skipBtn{ position:fixed; right:20px; bottom:20px; background:#ef4444; }
+    #skipBtn:hover{ background:#dc2626; }
+
+    #winOverlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.6);
+      display:none; align-items:center; justify-content:center;
+      z-index:99;
+    }
+    #winOverlay .box{
+      background:#fff; padding:30px; border-radius:16px; text-align:center;
+      box-shadow:0 8px 20px rgba(0,0,0,.35);
+    }
+    #winOverlay h2{ margin:0 0 16px; }
+
+    /* 图片选择区 */
+    .img-select { display:flex; gap:10px; justify-content:center; margin:10px 0; }
+    .img-select img { width:60px; height:60px; object-fit:cover; border-radius:8px; cursor:pointer; border:2px solid transparent; }
+    .img-select img.active { border-color:#2563eb; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ① 游戏说明 -->
+    <div class="description">拼图小游戏：选择难度和喜欢的图片，把拼图拼完整吧！</div>
+    <div id="board" class="board" aria-label="拼图华容道棋盘"></div>
+
+    <aside class="panel">
+      <div class="stats">
+        <div>步数：<span id="moves">0</span></div>
+        <div>用时：<span id="time">00:00</span></div>
+      </div>
+
+      <!-- ② 难度选择按钮 -->
+      <div>
+        难度：
+        <button class="levelBtn" data-cols="2">2×2</button>
+        <button class="levelBtn" data-cols="3">3×3</button>
+        <button class="levelBtn" data-cols="4">4×4</button>
+        <button class="levelBtn" data-cols="5">5×5</button>
+      </div>
+
+      <!-- ③ 图片选择 -->
+      <div>
+        选择我的偶像：
+        <div class="img-select" id="imgSelect">
+          <img src="images/game2.jpg" data-url="images/game2.jpg" class="active">
+          <img src="images/game3.png" data-url="images/game3.png">
+          <img src="images/game4.jpg" data-url="images/game4.jpg">
+          <img src="images/game5.jpg" data-url="images/game5.jpg">
+        </div>
+      </div>
+
+      <button id="shuffleBtn">开始/洗牌</button>
+      <button id="solveBtn">自动求解</button>
+
+      <button id="solveBtn">还原</button>
+      <h5>自动求解不适用于5*5，你可能等不到结果！（4*4等待时间较长）</h5>
+
+    </aside>
+  </div>
+
+  <!-- <div id="winOverlay">
+    <div class="box">
+      <h2>🎉 恭喜你拼好了！</h2>
+      <button onclick="location.href='index1.html'">更多游戏</button>
+      <button onclick="location.reload()">再来一次</button>
+    </div>
+  </div> -->
+
+<div id="winOverlay"> 
+  <div class="box">
+    <h2>🎉 恭喜你拼好了！</h2>
+    <!-- 点击时累加 failTimes，每累计3次解锁成就6 -->
+    <button onclick="finishMiniGame(true, 'continue')">继续游戏</button>
+    <!-- <button onclick="unlockCountAchievement(6, 'completeTimes', 3); location.reload()">再来一次</button> -->
+  </div>
+</div>
+
+  <button id="skipBtn" onclick="finishMiniGame(false, 'quit')">我怂，跳过</button>
+
+
+  <script>
+function finishMiniGame(success, action) {
+  // 先调用成就逻辑
+  if (success) {
+    unlockCountAchievement(6, 'completeTimes', 3);
+  }
+
+  if (window.opener) {
+    window.opener.postMessage({
+      type: "MiniGameResult",
+      success: success,
+      action: action
+    }, "*");
+    window.close(); // 通知完主程序后关闭窗口
+  } else {
+    // 调试模式（直接运行小游戏）
+    if (action === "retry") {
+      location.reload();
+    } else {
+      location.href = "index1.html";
+    }
+  }
+}
+</script>
+  <script>
+
+
+(function(){
+  let COLS = 3, ROWS = 3, SIZE = COLS*ROWS;
+  const boardEl = document.getElementById('board');
+  const movesEl = document.getElementById('moves');
+  const timeEl = document.getElementById('time');
+  const shuffleBtn = document.getElementById('shuffleBtn');
+  const solveBtn = document.getElementById('solveBtn');
+  const winOverlay = document.getElementById('winOverlay');
+  const imgSelect = document.getElementById('imgSelect');
+
+  let tiles = [], state = [], moves = 0;
+  let timer = null, seconds = 0, playing = false;
+  let imgURL = "images/game2.jpg"; // 默认图片
+
+  // ============ 有解性判断 ============
+  function isSolvable(arr){
+    const invArr = arr.filter(x=>x!==0);
+    let invCount=0;
+    for(let i=0;i<invArr.length;i++){
+      for(let j=i+1;j<invArr.length;j++){
+        if(invArr[i]>invArr[j]) invCount++;
+      }
+    }
+    if(COLS%2===1){
+      return invCount%2===0;
+    }else{
+      const blankRowFromBottom = ROWS - Math.floor(arr.indexOf(0)/COLS);
+      if(blankRowFromBottom%2===0){
+        return invCount%2===1;
+      }else{
+        return invCount%2===0;
+      }
+    }
+  }
+
+  function init(){
+    SIZE = COLS*ROWS;
+    boardEl.style.setProperty("--cols", COLS);
+    boardEl.style.setProperty("--rows", ROWS);
+    boardEl.innerHTML = '';
+    tiles = [];
+    for(let i=0;i<SIZE;i++){
+      const tile = document.createElement('div');
+      tile.className = 'tile';
+      tile.dataset.index = i;
+      const label = document.createElement('span');
+      label.className = 'tile-label';
+      label.textContent = i+1;
+      tile.appendChild(label);
+      tile.addEventListener('click', onTileClick);
+      tiles.push(tile);
+      boardEl.appendChild(tile);
+    }
+    reset();
+  }
+
+  function reset(){
+    state = Array.from({length: SIZE}, (_,i)=> (i+1)%SIZE);
+    render();
+    setMoves(0); stopTimer(); updateTime(0);
+    playing = false;
+    winOverlay.style.display = "none";
+  }
+
+  function setMoves(n){ moves=n; movesEl.textContent=n; }
+  function startTimer(){ if(timer) return; timer=setInterval(()=>{seconds++; updateTime(seconds);},1000); }
+  function stopTimer(){ clearInterval(timer); timer=null; seconds=0; }
+  function updateTime(sec){
+    const m=Math.floor(sec/60).toString().padStart(2,'0');
+    const s=(sec%60).toString().padStart(2,'0');
+    timeEl.textContent=`${m}:${s}`;
+  }
+
+  function posOf(val,arr=state){ return arr.indexOf(val);}
+  function rowOf(idx){ return Math.floor(idx/COLS);}
+  function colOf(idx){ return idx%COLS;}
+  function isAdjacent(a,b){
+    const ra=rowOf(a), rb=rowOf(b), ca=colOf(a), cb=colOf(b);
+    return (a!==b)&&((ra===rb&&Math.abs(ca-cb)===1)||(ca===cb&&Math.abs(ra-rb)===1));
+  }
+  function swapAt(i,j,arr=state){ const t=arr[i]; arr[i]=arr[j]; arr[j]=t; }
+
+  function onTileClick(e){
+    const idx=Number(e.currentTarget.dataset.index);
+    const blank=posOf(0);
+    if(isAdjacent(idx,blank)){
+      swapAt(idx,blank);
+      render();
+      if(!playing){ playing=true; startTimer(); }
+      setMoves(moves+1);
+      checkWin();
+    }
+  }
+
+  // ============ 洗牌 ============
+  function shuffle(){
+    let arr;
+    do{
+      arr=Array.from({length:SIZE},(_,i)=>(i+1)%SIZE);
+      for(let i=arr.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
+      }
+    }while(!isSolvable(arr) || isSolved(arr));
+    state=arr; render(); setMoves(0); seconds=0; updateTime(0); playing=true; startTimer();
+  }
+
+  function isSolved(arr=state){
+    for(let i=0;i<SIZE-1;i++){ if(arr[i]!==i+1) return false; }
+    return arr[SIZE-1]===0;
+  }
+
+  function render(){
+    for(let i=0;i<SIZE;i++){
+      const val=state[i];
+      const tile=tiles[i];
+      const label=tile.querySelector('.tile-label');
+      if(val===0){
+        tile.classList.add('blank'); label.textContent='';
+      }else{
+        tile.classList.remove('blank');
+        label.textContent=val;
+        const correctIdx=val-1;
+        const r=Math.floor(correctIdx/COLS);
+        const c=correctIdx%COLS;
+        tile.style.backgroundImage=`url(${imgURL})`;
+        tile.style.backgroundSize=`${COLS*100}% ${ROWS*100}%`;
+        tile.style.backgroundPosition=`${c*(100/(COLS-1))}% ${r*(100/(ROWS-1))}%`;
+      }
+    }
+  }
+
+  function checkWin(){
+    if(isSolved()){
+      stopTimer();
+      winOverlay.style.display="flex";
+      localStorage.setItem(`puzzle_${COLS}x${ROWS}`, "cleared");
+    }
+  }
+
+  // ============ 自动求解（IDA* 搜索，不卡死） ============
+  function heuristicManhattan(arr){
+    let d = 0;
+    for(let i=0;i<SIZE;i++){
+      const v = arr[i];
+      if(v===0) continue;
+      const cr = Math.floor(i/COLS), cc = i%COLS;
+      const gr = Math.floor((v-1)/COLS), gc = (v-1)%COLS;
+      d += Math.abs(cr-gr) + Math.abs(cc-gc);
+    }
+    return d;
+  }
+
+  function isGoalArray(arr){
+    for(let i=0;i<SIZE-1;i++) if(arr[i]!==i+1) return false;
+    return arr[SIZE-1]===0;
+  }
+
+  function neighborIndices(blank){
+    const r = rowOf(blank), c = colOf(blank);
+    const res = [];
+    if(r>0) res.push(blank-COLS);
+    if(r<ROWS-1) res.push(blank+COLS);
+    if(c>0) res.push(blank-1);
+    if(c<COLS-1) res.push(blank+1);
+    return res;
+  }
+
+  function sleepFrame(){ return new Promise(r=>setTimeout(r,0)); }
+
+  async function dfsBound(arr, blank, g, bound, prevBlank, path, tickStart){
+    const h = heuristicManhattan(arr);
+    const f = g + h;
+    if(f > bound) return {found:false, bound:f};
+    if(isGoalArray(arr)) return {found:true, bound:g, path};
+
+    if((performance.now?.() ?? Date.now()) - tickStart > 16){
+      await sleepFrame();
+      tickStart = performance.now?.() ?? Date.now();
+    }
+
+    const opts = [];
+    for(const nb of neighborIndices(blank)){
+      if(nb === prevBlank) continue;
+      const next = arr.slice();
+      [next[blank], next[nb]] = [next[nb], next[blank]];
+      const hh = heuristicManhattan(next);
+      opts.push({nb, next, hh});
+    }
+    opts.sort((a,b)=>a.hh - b.hh);
+
+    let min = Infinity;
+    for(const o of opts){
+      const r = await dfsBound(o.next, o.nb, g+1, bound, blank, path.concat([o.nb]), tickStart);
+      if(r.found) return r;
+      if(r.bound < min) min = r.bound;
+    }
+    return {found:false, bound:min};
+  }
+
+  async function idaStarSolve(start){
+    let bound = heuristicManhattan(start);
+    const hardCap = 1e6;
+    let iters = 0;
+    while(true){
+      const res = await dfsBound(start, start.indexOf(0), 0, bound, -1, [], performance.now?.() ?? Date.now());
+      if(res.found) return res.path;
+      if(!isFinite(res.bound)) return null;
+      bound = res.bound;
+      if(++iters > 2000 || bound > hardCap) return null;
+    }
+  }
+
+  async function autoSolve(){
+    if(isSolved()) return;
+
+    solveBtn.disabled = true;
+    shuffleBtn.disabled = true;
+    boardEl.style.pointerEvents = "none";
+
+    const start = state.slice();
+    const path = await idaStarSolve(start);
+
+    if(!path){
+      alert("求解失败或耗时过长，请重新洗牌。");
+      solveBtn.disabled = false;
+      shuffleBtn.disabled = false;
+      boardEl.style.pointerEvents = "auto";
+      return;
+    }
+
+    let i=0;
+    const interval=setInterval(()=>{
+      if(i>=path.length){
+        clearInterval(interval);
+        solveBtn.disabled = false;
+        shuffleBtn.disabled = false;
+        boardEl.style.pointerEvents = "auto";
+        checkWin();
+        return;
+      }
+      const idx=path[i];
+      const blank=posOf(0);
+      if(isAdjacent(idx,blank)){
+        swapAt(idx,blank);
+        render();
+        setMoves(moves+1);
+      }
+      i++;
+    },333);
+  }
+
+  shuffleBtn.addEventListener('click', shuffle);
+  solveBtn.addEventListener('click', autoSolve);
+
+  document.querySelectorAll(".levelBtn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      COLS=ROWS=Number(btn.dataset.cols);
+      init();
+    });
+  });
+
+  imgSelect.addEventListener("click",(e)=>{
+    if(e.target.tagName==="IMG"){
+      document.querySelectorAll("#imgSelect img").forEach(img=>img.classList.remove("active"));
+      e.target.classList.add("active");
+      imgURL=e.target.dataset.url;
+      render();
+    }
+  });
+
+  init();
+})();
+
+  
+  </script>
+
+
+<!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Double Trouble.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+
+  <script src="../achievements.js"></script>
+</body>
+</html>

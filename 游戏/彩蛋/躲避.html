@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>太阳躲避小游戏</title>
+  <style>
+    body { 
+      text-align: center; 
+      background: url("../images/3.jpg") no-repeat center center fixed; 
+      background-size: cover;
+      font-family: "微软雅黑", sans-serif;
+    }
+    canvas { 
+      background: rgba(255, 255, 255, 0.85); 
+      border: 3px solid #333; 
+      border-radius: 10px;
+      margin-top: 20px; 
+      box-shadow: 0 0 20px rgba(255,215,0,0.4); /* 给画布也加点光感 */
+    }
+    #status { 
+      font-size: 20px; 
+      margin-top: 15px; 
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 8px #000;
+    }
+    button { 
+      margin: 10px; 
+      padding: 10px 20px; 
+      font-size: 16px; 
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ffd700, #ffae00);
+      color: #fff;
+      font-weight: bold;
+      box-shadow: 0 0 10px rgba(255,215,0,0.6);
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <h2 style="color:white; text-shadow:0 0 10px gold;">🌞 敌人躲避战 🌞</h2>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <p id="status"></p>
+  <div id="buttons"></div>
+<script src="../achievements.js"></script>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // 玩家
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 50,
+      radius: 20,
+      speed: 3,
+      img: new Image()
+    };
+    player.img.src = "images/game3.png";
+
+    // 敌人用图片
+    const enemyImg = new Image();
+    enemyImg.src = "images/game2.jpg";
+
+    let enemies = [];
+    let gameOver = false;
+    let spawnRate = 40;
+    let frameCount = 0;
+
+    let gameTime = 15;   // 游戏时长
+    let hp = 100;        // 初始生命值
+    let timerInterval;
+
+    // 键盘控制
+    let keys = {};
+    document.addEventListener("keydown", e => keys[e.key] = true);
+    document.addEventListener("keyup", e => keys[e.key] = false);
+
+    // 鼠标控制
+    canvas.addEventListener("mousemove", e => {
+      const rect = canvas.getBoundingClientRect();
+      player.x = e.clientX - rect.left;
+    });
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(player.img, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+      ctx.restore();
+    }
+
+    function drawEnemies() {
+      enemies.forEach(e => {
+        // 金色光环
+        ctx.save();
+        ctx.shadowColor = "gold";
+        ctx.shadowBlur = 25;
+
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(enemyImg, e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2);
+
+        ctx.restore();
+      });
+    }
+
+    function updateEnemies() {
+      enemies.forEach(e => e.y += e.speed);
+      enemies = enemies.filter(e => e.y < canvas.height + e.radius);
+    }
+
+    function spawnEnemy() {
+      const radius = 15;
+      const x = Math.random() * (canvas.width - radius * 2) + radius;
+      enemies.push({ x, y: -radius, radius, speed: 3 });
+    }
+
+    function checkCollision() {
+      for (let e of enemies) {
+        let dx = e.x - player.x;
+        let dy = e.y - player.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < e.radius + player.radius) {
+          hp -= 10; // 扣血
+          enemies.splice(enemies.indexOf(e), 1); // 删除敌人
+          if (hp <= 0) {
+            endGame(false); // 失败
+          }
+        }
+      }
+    }
+
+    function updatePlayer() {
+      if (keys["ArrowLeft"] && player.x - player.radius > 0) {
+        player.x -= player.speed;
+      }
+      if (keys["ArrowRight"] && player.x + player.radius < canvas.width) {
+        player.x += player.speed;
+      }
+    }
+
+    function drawStatus() {
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "black";
+      ctx.fillText("剩余时间: " + gameTime + " 秒", 20, 30);
+      ctx.fillText("生命值: " + hp, 20, 55);
+    }
+
+    // function endGame(success) {
+    //   gameOver = true;
+    //   clearInterval(timerInterval);
+    //   let msg;
+
+    //   if (success) {
+    //     msg = "✅ 成功冲出敌人！";
+    //     document.getElementById("buttons").innerHTML =
+    //       `<button onclick="location.href='index1.html'">别的游戏</button>`;
+    //   } else {
+    //     msg = "❌ 被敌人淹没了！";
+    //     document.getElementById("buttons").innerHTML =
+    //       `<button onclick="location.reload()">重新开始</button>
+    //        <button onclick="location.href='index1.html'">不干了</button>`;
+    //   }
+    //   document.getElementById("status").innerText = msg;
+    // }
+
+    function endGame(success) {
+  gameOver = true;
+  clearInterval(timerInterval);
+  let msg;
+
+  if (success) {
+    msg = "✅ 成功冲出敌人！";
+    document.getElementById("buttons").innerHTML =
+      `<button onclick="location.href='index1.html'">别的游戏</button>`;
+
+    // ==== 成就接入逻辑（成功后才解锁） ====
+    // 先确认成就函数存在（避免报错）
+    if (typeof unlockCountAchievement === 'function' && typeof unlockAchievement === 'function') {
+      // 1) 增加一次“小游戏成功”计数并尝试解锁第7（需要3次）
+      //    这会把 achievementCounts.currentUser.eggSuccesses +1
+      unlockCountAchievement(7, 'eggSuccesses', 3);
+
+      // 2) 确保第6（玩过一次彩蛋小游戏）在成功后被标记为已解锁（如果还没解锁）
+      //    我们先检查本地记录有没有第6，若没有就解锁第6（只解锁一次）
+      let currentUser = localStorage.getItem("currentUser");
+      if (currentUser) {
+        let achievements = JSON.parse(localStorage.getItem("achievements") || "{}");
+        let userAch = achievements[currentUser] || [];
+        if (!userAch.includes(6)) {
+          // 只在成功后将第6置为已解锁（按你要求“成功后才能解锁”）
+          unlockAchievement(6);
+        }
+      }
+    } else {
+      // 如果没有加载成就脚本，可以在控制台提示
+      console.warn("成就脚本未加载，无法记录成就。请确保 ../achievements.js 已正确引入。");
+    }
+    // ==== 成就处理结束 ====
+
+  } else {
+    msg = "❌ 被敌人淹没了！";
+    document.getElementById("buttons").innerHTML =
+      `<button onclick="location.reload()">重新开始</button>
+       <button onclick="location.href='index1.html'">不干了</button>`;
+  }
+  document.getElementById("status").innerText = msg;
+}
+
+
+    function gameLoop() {
+      if (gameOver) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      updatePlayer();
+      updateEnemies();
+
+      frameCount++;
+      if (frameCount % spawnRate === 0) {
+        spawnEnemy();
+        if (spawnRate > 10) spawnRate--;
+      }
+
+      checkCollision();
+
+      drawPlayer();
+      drawEnemies();
+      drawStatus();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+      alert(
+        "🌞【敌人躲避小游戏】\n\n" +
+        "玩法：\n" +
+        "- 用鼠标或 ← → 方向键控制小球移动\n" +
+        "- 初始生命值：100\n" +
+        "- 每次撞到敌人扣 10 点生命\n" +
+        "- 游戏时长：10 秒\n\n" +
+        "目标：\n" +
+        "在倒计时结束前存活下来！"
+      );
+
+      timerInterval = setInterval(() => {
+        if (gameTime > 0) {
+          gameTime--;
+        } else {
+          endGame(true);
+        }
+      }, 1000);
+
+      gameLoop();
+    }
+
+    // 开始游戏
+    startGame();
+  </script>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Can Can.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>

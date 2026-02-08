@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>哈利波特主题战斗游戏 — 小Boss版</title>
+  <style>
+    html,body{height:100%;margin:0;background:#12121a;display:flex;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#fff}
+    #gameWrap { display:flex; flex-direction:column; align-items:center; margin-top:80px; }
+    canvas{background:#062b12;image-rendering:pixelated;border:6px solid rgba(255,255,255,0.04);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+    .hud{margin-top:8px;display:flex;gap:12px;align-items:center}
+    .bar{background:#222;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:6px}
+    .hpTrack{width:300px;height:12px;background:#333;border-radius:8px;overflow:hidden}
+    .hpInner{height:100%;background:linear-gradient(90deg,#0f0,#0a8);width:100%;}
+    /* .msg { position:absolute; top:40%; left:50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color:#fff; padding:20px 30px; border-radius:12px; font-size:20px; font-weight:bold; text-align:center; z-index:9999; display:none; } */
+     .msg {
+      position:absolute;
+      top:20px;         /* 改成靠顶部 */
+      left:50%;
+      transform: translateX(-50%); /* 只做水平居中，不再垂直居中 */
+      background: rgba(0,0,0,0.8);
+      color:#fff;
+      padding:10px 20px;
+      border-radius:8px;
+      font-size:18px;
+      font-weight:bold;
+      text-align:center;
+      z-index:9999;
+      display:none;
+    }
+
+    .game-title { text-align:center; font-size:28px; color:#f5f5f5; margin:12px 0; font-weight:bold; letter-spacing:2px; }
+    .controls{font-size:13px;color:#ddd; margin-top:6px}
+    .btns{margin-top:8px;display:flex;gap:8px}
+    .btn{background:#2b6;padding:6px 10px;border-radius:6px;color:#071;font-weight:700;cursor:pointer; user-select:none}
+    .btn.secondary{background:#444;color:#ddd}
+  </style>
+</head>
+<body>
+
+      <script src="../achievements.js"></script>
+<div id="gameWrap"><br>
+  <h1 class="game-title">哈利波特主题战斗游戏 — 小Boss版</h1>
+  <div style="position:relative">
+    <canvas id="c" width="600" height="600"></canvas>
+    <div id="message" class="msg" style="display:none"></div>
+  </div>
+
+  <div class="hud">
+    <div class="bar">
+      <div>玩家生命：</div>
+      <div class="hpTrack"><div id="playerHP" class="hpInner" style="width:100%"></div></div>
+      <div style="font-size:12px;margin-top:2px" id="hpText">100 / 100</div>
+    </div>
+
+    <div class="bar">
+      <div>Boss 生命：</div>
+      <div class="hpTrack"><div id="bossHP" class="hpInner" style="width:100%"></div></div>
+      <div style="font-size:12px;margin-top:2px" id="bossHpText">— / —</div>
+    </div>
+
+    <div class="bar">
+      <div style="font-size:12px">按键：方向键 / WASD 移动，IJKL 发射（上/下/左/右）。发射冷却 0.5s，玩家同时子弹上限 100。</div>
+    </div>
+  </div>
+
+  <div class="btns">
+    <div class="btn" id="restartBtn">重新开始</div>
+    <div class="btn secondary" id="continueBtn">打不过</div>
+  </div>
+</div>
+
+<script>
+/* ========== 配置 ========== */
+const cellCount = 15;
+const cellSize = 600 / cellCount;
+
+const CONFIG = {
+  playerMaxHp: 100,
+  playerDamage: 25,
+  playerMoveMsPerCell: 120,
+  player: {
+    fireCooldownMs: 500, // 0.5 秒
+    maxActiveBullets: 100 // 玩家同时允许的子弹数量（active）
+  },
+  bullet: {
+    speed: 0.45,
+    enemySpeed: 0.28,
+    lifeFrames: 120,
+    homingSteer: 0.14
+  },
+  boss: {
+    hp: 450,
+    size: 2, // 占格 2x2
+    skillMinDelay: 1200,
+    skillMaxDelay: 3000,
+    burst: { count: 10, spread: Math.PI * 2, speed: 0.36, homing:true },
+    dash: { steps: 6, stepInterval: 90, speedCellsPerStep: 1.0, damage: 18 },
+    teleport: { margin:1 }, // 瞬移时保证不超边界
+    cone: { rays: 10, spread: Math.PI/3, speed: 0.6, damage: 14 },
+    summon: { count: 6, speed: 0.22, life: 240, damage: 12 },
+    shield: { duration: 1400, damageReduction: 0.5 }
+  },
+  enemyBulletDamage: 18,
+  playerMeleeDamage: 10
+};
+
+/* ========== 状态 ========== */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const playerHPBar = document.getElementById('playerHP');
+const bossHPBar = document.getElementById('bossHP');
+const hpText = document.getElementById('hpText');
+const bossHpText = document.getElementById('bossHpText');
+const restartBtn = document.getElementById('restartBtn');
+const continueBtn = document.getElementById('continueBtn');
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function now(){ return performance.now(); }
+function gridToPx(gx,gy){ return { x: gx*cellSize + cellSize/2, y: gy*cellSize + cellSize/2 }; }
+
+const state = {
+  player: { x: cellCount-2, y: cellCount-2, animX: cellCount-2, animY: cellCount-2, hp: CONFIG.playerMaxHp, maxHp: CONFIG.playerMaxHp, dir:{x:-1,y:0}, moving:false, moveTarget:null, moveStartAt:0, moveEndAt:0, lastShotAt:0 },
+  bullets: [], // 通用子弹列表，从 player 或 enemy（包括小型召唤物）
+  particles: [],
+  keys: {},
+  running: true, win:false, lose:false,
+  boss: null
+};
+
+/* ========== 资源占位（可替换图片） ========== */
+let images = {};
+let loadedImgs = 0, totalImgs = 2;
+function loadImg(key, src){
+  const img = new Image();
+  img.src = src;
+  img.onload = ()=>{ images[key]=img; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+  img.onerror = ()=>{ images[key]=null; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+}
+loadImg('player','../images/01.png');
+loadImg('boss','../images/02.png');
+
+/* ========== Boss 创建与技能 ========== */
+function createBoss(gx, gy){
+  const b = {
+    id: uid(),
+    x: gx,
+    y: gy,
+    animX: gx,
+    animY: gy,
+    size: CONFIG.boss.size,
+    hp: CONFIG.boss.hp,
+    maxHp: CONFIG.boss.hp,
+    lastSkillAt: now(),
+    nextSkillDelay: randInt(CONFIG.boss.skillMinDelay, CONFIG.boss.skillMaxDelay),
+    dashing: false,
+    dashUntil: 0,
+    dashStepsLeft: 0,
+    dashDir: {x:0,y:0},
+    dashNextStepAt: 0,
+    shielded: false,
+    shieldUntil: 0
+  };
+  return b;
+}
+
+function scheduleNextBossSkill(b){
+  b.nextSkillDelay = randInt(CONFIG.boss.skillMinDelay, CONFIG.boss.skillMaxDelay);
+  b.lastSkillAt = now();
+}
+
+/* Boss 技能实现：burst / teleport / dash / cone / summon / shield */
+function bossDoSkill(b){
+  const choice = randInt(1,100);
+  if(choice <= 35){
+    bossBurst(b);
+  } else if(choice <= 60){
+    bossCone(b);
+  } else if(choice <= 78){
+    bossSummon(b);
+  } else if(choice <= 90){
+    bossDash(b);
+  } else if(choice <= 96){
+    bossTeleport(b);
+  } else {
+    bossShield(b);
+  }
+  scheduleNextBossSkill(b);
+}
+
+function bossBurst(b){
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const count = CONFIG.boss.burst.count;
+  for(let i=0;i<count;i++){
+    const ang = (i/count) * Math.PI*2 + (Math.random()-0.5)*0.2;
+    const vx = Math.cos(ang) * CONFIG.boss.burst.speed;
+    const vy = Math.sin(ang) * CONFIG.boss.burst.speed;
+    state.bullets.push({
+      id: uid(), x: centerX, y: centerY, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing: !!CONFIG.boss.burst.homing, homingStrength: CONFIG.bullet.homingSteer
+    });
+  }
+  spawnParticles(centerX, centerY, 16, 1.3, true);
+  showMessageTransient('Boss 使用了 追踪弹幕！', 900);
+}
+
+function bossCone(b){
+  // 朝玩家方向发出锥形冲击
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const px = state.player.x + 0.001, py = state.player.y + 0.001;
+  const baseAng = Math.atan2(py - centerY, px - centerX);
+  const rays = CONFIG.boss.cone.rays;
+  const half = CONFIG.boss.cone.spread / 2;
+  for(let i=0;i<rays;i++){
+    const t = i/(rays-1);
+    const ang = baseAng - half + t * (half*2) + (Math.random()-0.5)*0.06;
+    const vx = Math.cos(ang) * CONFIG.boss.cone.speed;
+    const vy = Math.sin(ang) * CONFIG.boss.cone.speed;
+    state.bullets.push({ id: uid(), x: centerX, y: centerY, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.boss.cone.damage, homing:false });
+  }
+  spawnParticles(centerX, centerY, 14, 1.6, true);
+  showMessageTransient('Boss 发射了 锥形冲击！', 900);
+}
+
+function bossSummon(b){
+  // 召唤若干追踪小球（视作小型敌方子弹，但生命更长，伤害不同）
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const count = CONFIG.boss.summon.count;
+  for(let i=0;i<count;i++){
+    const ang = Math.random()*Math.PI*2;
+    const r = 0.6 + Math.random()*0.8;
+    const sx = centerX + Math.cos(ang)*r;
+    const sy = centerY + Math.sin(ang)*r;
+    state.bullets.push({ id: uid(), x: sx, y: sy, vx: 0, vy: 0, life: CONFIG.boss.summon.life, from:'enemy', damage: CONFIG.boss.summon.damage, homing:true, homingStrength: 0.06, isMinion:true });
+  }
+  spawnParticles(centerX, centerY, 20, 1.8, true);
+  showMessageTransient('Boss 召唤了 追踪小球！', 900);
+}
+
+function bossTeleport(b){
+  const margin = CONFIG.boss.teleport.margin;
+  let attempts = 0;
+  let nx, ny;
+  do{
+    nx = randInt(margin, cellCount - b.size - margin);
+    ny = randInt(margin, cellCount - b.size - margin);
+    attempts++;
+    const dist = Math.hypot(nx - state.player.x, ny - state.player.y);
+    if(dist > cellCount/3) break;
+  } while(attempts < 40);
+  spawnRing(b.x + b.size/2, b.y + b.size/2, b.size*0.9, 24);
+  b.x = nx; b.y = ny;
+  b.animX = b.x; b.animY = b.y;
+  spawnParticles(b.x + b.size/2, b.y + b.size/2, 30, 1.5, true);
+  showMessageTransient('Boss 瞬移！', 700);
+}
+
+function bossDash(b){
+  const dx = Math.sign(state.player.x - (b.x + b.size/2));
+  const dy = Math.sign(state.player.y - (b.y + b.size/2));
+  let dir = {x: dx, y: dy};
+  if(dir.x === 0 && dir.y === 0){
+    const r = randInt(0,3);
+    dir = (r===0?{x:1,y:0}:r===1?{x:-1,y:0}:r===2?{x:0,y:1}:{x:0,y:-1});
+  }
+  b.dashing = true;
+  b.dashStepsLeft = CONFIG.boss.dash.steps;
+  b.dashDir = dir;
+  b.dashNextStepAt = now() + 20;
+  showMessageTransient('Boss 冲刺！', 700);
+}
+
+function bossShield(b){
+  b.shielded = true;
+  b.shieldUntil = now() + CONFIG.boss.shield.duration;
+  spawnParticles(b.x + b.size/2, b.y + b.size/2, 22, 1.6, true);
+  showMessageTransient('Boss 启动 结界（护盾）！', 900);
+}
+
+/* ========== 粒子/视觉辅助 ========== */
+function spawnParticles(gx, gy, n, speedScale=1, bright=false){
+  const base = gridToPx(gx, gy);
+  for(let i=0;i<n;i++){
+    const ang = Math.random()*Math.PI*2;
+    const sp = Math.random()*2*speedScale;
+    state.particles.push({ x: base.x, y: base.y, vx: Math.cos(ang)*sp*0.06, vy: Math.sin(ang)*0.06 - 0.2, life: randInt(12,40), bright });
+  }
+}
+function spawnRing(gx, gy, radius, count=24){
+  const base = gridToPx(gx,gy);
+  for(let i=0;i<count;i++){
+    const ang = (i/count)*Math.PI*2;
+    const r = (radius * cellSize) * (0.9 + Math.random()*0.25);
+    state.particles.push({ x: base.x + Math.cos(ang)*r, y: base.y + Math.sin(ang)*r, vx: Math.cos(ang)*0.02, vy: Math.sin(ang)*0.02, life: 36, bright: true });
+  }
+}
+function showMessageTransient(txt, ms=800){
+  messageEl.textContent = txt;
+  messageEl.style.display = 'block';
+  clearTimeout(messageEl._hideTimer);
+  messageEl._hideTimer = setTimeout(()=>{ messageEl.style.display = 'none'; }, ms);
+}
+
+/* ========== 玩家与输入 ========== */
+let lastKeyMoveAt = 0;
+const keyRepeatMs = 120;
+
+function attachEvents(){
+  window.addEventListener('keydown', e=>{
+    const k = e.key.toLowerCase();
+    state.keys[k] = true;
+
+    if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
+      tryMoveByKey(k);
+    }
+
+    if(k === 'i'){ playerShoot({x:0,y:-1}); e.preventDefault(); }
+    if(k === 'k'){ playerShoot({x:0,y:1}); e.preventDefault(); }
+    if(k === 'j'){ playerShoot({x:-1,y:0}); e.preventDefault(); }
+    if(k === 'l'){ playerShoot({x:1,y:0}); e.preventDefault(); }
+  });
+  window.addEventListener('keyup', e=>{
+    state.keys[e.key.toLowerCase()] = false;
+  });
+
+restartBtn.onclick = ()=> window.location.href = "index1.html";
+continueBtn.onclick = ()=> window.location.href = "index1.html";
+
+}
+
+function tryMoveByKey(k){
+  const t = now();
+  if(state.player.moving && t < state.player.moveEndAt) return;
+  if(t - lastKeyMoveAt < 40) return;
+  lastKeyMoveAt = t;
+  let dx=0, dy=0;
+  if(k==='arrowup'||k==='w') dy=-1;
+  if(k==='arrowdown'||k==='s') dy=1;
+  if(k==='arrowleft'||k==='a') dx=-1;
+  if(k==='arrowright'||k==='d') dx=1;
+  if(dx===0 && dy===0) return;
+  const tx = Math.max(0, Math.min(cellCount-1, state.player.x + dx));
+  const ty = Math.max(0, Math.min(cellCount-1, state.player.y + dy));
+  if(tx===state.player.x && ty===state.player.y) return;
+  state.player.moveTarget = {x:tx,y:ty};
+  state.player.moving = true;
+  state.player.moveStartAt = now();
+  state.player.moveEndAt = state.player.moveStartAt + CONFIG.playerMoveMsPerCell;
+  state.player.dir = {x: Math.sign(dx), y: Math.sign(dy)};
+}
+
+/* 玩家发射（增加冷却与上限检测） */
+function playerShoot(dir){
+  if(!state.running) return;
+  const t = now();
+  if(t - state.player.lastShotAt < CONFIG.player.fireCooldownMs){
+    // 冷却中
+    showMessageTransient('法力恢复中...', 300);
+    return;
+  }
+  // 统计当前玩家主动子弹数量（active）
+  let activePlayerBullets = 0;
+  for(const b of state.bullets) if(b.from === 'player') activePlayerBullets++;
+  if(activePlayerBullets >= CONFIG.player.maxActiveBullets){
+    showMessageTransient('子弹已达上限！', 500);
+    return;
+  }
+
+  state.player.lastShotAt = t;
+  let d = dir || state.player.dir || {x:0,y:-1};
+  const start = { x: state.player.x + d.x*0.5, y: state.player.y + d.y*0.5 };
+  state.bullets.push({
+    id: uid(), x: start.x, y: start.y, vx: d.x * CONFIG.bullet.speed, vy: d.y * CONFIG.bullet.speed, life: CONFIG.bullet.lifeFrames, from:'player', damage: CONFIG.playerDamage
+  });
+  spawnParticles(state.player.x, state.player.y, 6, 0.6);
+}
+
+/* ========== 游戏启动 / 敌人填充 ========== */
+function populateBoss(){
+  const gx = Math.floor((cellCount - CONFIG.boss.size)/2);
+  const gy = Math.floor((cellCount - CONFIG.boss.size)/3);
+  state.boss = createBoss(gx, gy);
+  scheduleNextBossSkill(state.boss);
+}
+
+function start(){
+  populateBoss();
+  attachEvents();
+  restartBtn.onclick = ()=> location.reload();
+  requestAnimationFrame(loop);
+}
+
+/* ========== 子弹与碰撞 ========== */
+function applyDamageToPlayer(dmg){
+  state.player.hp -= dmg;
+  spawnParticles(state.player.x, state.player.y, 8, 0.8, true);
+  if(state.player.hp <= 0) { state.player.hp = 0; lose(); }
+}
+
+/* 判定子弹与 boss 碰撞（boss 占 2x2 区域），同时考虑护盾 */
+function checkBulletHitBoss(bullet, boss){
+  if(!boss) return false;
+  if(bullet.x >= boss.x - 0.3 && bullet.x <= boss.x + boss.size - 0.3 &&
+     bullet.y >= boss.y - 0.3 && bullet.y <= boss.y + boss.size - 0.3){
+    return true;
+  }
+  return false;
+}
+
+/* ========== 主循环 ========== */
+let last = performance.now();
+function loop(nowTime){
+  const dtMs = Math.min(40, nowTime - last);
+  last = nowTime;
+  if(state.running){
+    update(dtMs);
+    render();
+  }
+  if(!state.win && !state.lose) requestAnimationFrame(loop);
+}
+
+/* 更新逻辑 */
+function update(dtMs){
+  const t = now();
+
+  // 自动重复移动按键
+  if(state.keys['arrowup']||state.keys['w']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowup'); }
+  if(state.keys['arrowdown']||state.keys['s']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowdown'); }
+  if(state.keys['arrowleft']||state.keys['a']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowleft'); }
+  if(state.keys['arrowright']||state.keys['d']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowright'); }
+
+  // 玩家移动插值
+  if(state.player.moving && state.player.moveTarget){
+    const start = state.player.moveStartAt;
+    const end = state.player.moveEndAt;
+    const ratio = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    state.player.animX = state.player.x + (state.player.moveTarget.x - state.player.x) * ratio;
+    state.player.animY = state.player.y + (state.player.moveTarget.y - state.player.y) * ratio;
+    if(ratio >= 1){
+      state.player.x = state.player.moveTarget.x;
+      state.player.y = state.player.moveTarget.y;
+      state.player.animX = state.player.x; state.player.animY = state.player.y;
+      state.player.moving = false; state.player.moveTarget = null;
+    }
+  } else {
+    state.player.animX += (state.player.x - state.player.animX) * 0.25;
+    state.player.animY += (state.player.y - state.player.animY) * 0.25;
+  }
+
+  // Boss 行为：技能触发与 dash 步进
+  const b = state.boss;
+  if(b){
+    // 处理护盾到期
+    if(b.shielded && now() > b.shieldUntil){ b.shielded = false; showMessageTransient('Boss 护盾消失'); }
+
+    // 处理 dash 步进
+    if(b.dashing && b.dashStepsLeft > 0 && t >= b.dashNextStepAt){
+      const stepCells = Math.max(1, Math.round(CONFIG.boss.dash.speedCellsPerStep));
+      for(let s=0;s<stepCells;s++){
+        const nx = Math.max(0, Math.min(cellCount - b.size, b.x + b.dashDir.x));
+        const ny = Math.max(0, Math.min(cellCount - b.size, b.y + b.dashDir.y));
+        if(nx === b.x && ny === b.y) break;
+        b.x = nx; b.y = ny;
+      }
+      b.animX += (b.x - b.animX) * 0.6;
+      b.animY += (b.y - b.animY) * 0.6;
+      if(playerOverlapsBoss(state.player, b)){
+        applyDamageToPlayer(CONFIG.boss.dash.damage);
+      }
+      b.dashStepsLeft--;
+      b.dashNextStepAt = t + CONFIG.boss.dash.stepInterval;
+      if(b.dashStepsLeft <= 0){ b.dashing = false; }
+    } else {
+      b.animX += (b.x - b.animX) * 0.18;
+      b.animY += (b.y - b.animY) * 0.18;
+    }
+
+    // 技能触发判定
+    if(t - b.lastSkillAt >= b.nextSkillDelay){ bossDoSkill(b); }
+  }
+
+  // 子弹更新（敌方 homing 调整）
+  for(let i = state.bullets.length - 1; i >= 0; i--){
+    const blet = state.bullets[i];
+    // 敌方的追踪小球或子弹
+    if(blet.from === 'enemy' && blet.homing){
+      // 大约每 120ms 调整一次
+      if(Math.floor(performance.now()/120) !== Math.floor((performance.now()-dtMs)/120)){
+        const px = state.player.x, py = state.player.y;
+        const dx = px - blet.x, dy = py - blet.y;
+        const mag = Math.hypot(dx,dy) || 1;
+        const desiredVx = (dx/mag) * (blet.isMinion ? CONFIG.boss.summon.speed : CONFIG.bullet.enemySpeed);
+        const desiredVy = (dy/mag) * (blet.isMinion ? CONFIG.boss.summon.speed : CONFIG.bullet.enemySpeed);
+        blet.vx += (desiredVx - blet.vx) * (blet.homingStrength || CONFIG.bullet.homingSteer);
+        blet.vy += (desiredVy - blet.vy) * (blet.homingStrength || CONFIG.bullet.homingSteer);
+        const s = Math.hypot(blet.vx, blet.vy) || 1;
+        const targetSpeed = (blet.isMinion ? CONFIG.boss.summon.speed : CONFIG.bullet.enemySpeed);
+        blet.vx = (blet.vx / s) * targetSpeed;
+        blet.vy = (blet.vy / s) * targetSpeed;
+      }
+    }
+
+    blet.x += blet.vx * (dtMs/16.67);
+    blet.y += blet.vy * (dtMs/16.67);
+    blet.life--;
+    if(blet.life <= 0 || blet.x < -2 || blet.x > cellCount+2 || blet.y < -2 || blet.y > cellCount+2){
+      state.bullets.splice(i,1); continue;
+    }
+
+    if(blet.from === 'player'){
+      // 命中 boss
+      if(state.boss && checkBulletHitBoss(blet, state.boss)){
+        // 若 boss 有护盾，减少伤害
+        const damageApplied = state.boss.shielded ? Math.max(1, Math.round(blet.damage * (1 - CONFIG.boss.shield.damageReduction))) : blet.damage;
+        state.boss.hp -= damageApplied;
+        spawnParticles(blet.x, blet.y, 10, 1.2);
+        state.bullets.splice(i,1);
+        if(state.boss.hp <= 0){ state.boss.hp = 0; state.boss = null; win(); }
+        continue;
+      }
+    } else {
+      // 敌方子弹撞到玩家
+      const d = Math.hypot(state.player.x - blet.x, state.player.y - blet.y);
+      if(d < 0.75){
+        applyDamageToPlayer(blet.damage);
+        spawnParticles(state.player.x, state.player.y, 10, 1.0);
+        state.bullets.splice(i,1);
+        continue;
+      }
+    }
+  }
+
+  // 粒子更新
+  for(let i=state.particles.length-1;i>=0;i--){
+    const p = state.particles[i];
+    p.life--;
+    p.x += p.vx * (dtMs/16.67);
+    p.y += p.vy * (dtMs/16.67);
+    p.vy += 0.01;
+    if(p.life <= 0) state.particles.splice(i,1);
+  }
+
+  // UI 更新
+  playerHPBar.style.width = Math.max(0,(state.player.hp/state.player.maxHp)*300) + 'px';
+  hpText.textContent = Math.max(0, Math.round(state.player.hp)) + ' / ' + state.player.maxHp;
+  if(state.boss){
+    bossHPBar.style.width = Math.max(0,(state.boss.hp/state.boss.maxHp)*300) + 'px';
+    bossHpText.textContent = Math.max(0, Math.round(state.boss.hp)) + ' / ' + state.boss.maxHp;
+  } else {
+    bossHPBar.style.width = '0px';
+    bossHpText.textContent = '0 / 0';
+  }
+}
+
+/* 玩家与 boss 碰撞判断（player 为点在格子） */
+function playerOverlapsBoss(player, boss){
+  if(!boss) return false;
+  return (player.x >= boss.x - 0.5 && player.x <= boss.x + boss.size - 0.5 &&
+          player.y >= boss.y - 0.5 && player.y <= boss.y + boss.size - 0.5);
+}
+
+/* 胜利 / 失败 */
+// function win(){
+//   state.win = true;
+//   showMessage('你赢了！Boss 被击败 🎉');
+//   render();
+//   state.running = false;
+//   restartBtn.textContent = "再来一次";
+//   restartBtn.onclick = ()=> location.reload();
+//   continueBtn.removeEventListener('click', failHandler);
+//   continueBtn.removeEventListener('click', successHandler);
+//   continueBtn.textContent = "继续游戏";
+//   continueBtn.classList.remove('secondary');
+//   continueBtn.addEventListener('click', successHandler);
+// }
+
+function win() {
+  state.win = true;
+  showMessage('你赢了！Boss 被击败 🎉');
+  render();
+  state.running = false;
+
+  // ✅ 立即解锁成就6（一次性）
+  unlockAchievement(6);
+  // ✅ 为成就7计数（累计3次解锁）
+  unlockCountAchievement(7, 'miniGameWins', 3);
+
+  // 再来一次按钮
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = () => location.reload();
+
+  // 切换 continueBtn：先移除失败监听，再绑定成功监听
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.textContent = "继续游戏";
+  continueBtn.classList.remove('secondary');
+  continueBtn.addEventListener('click', successHandler);
+}
+
+function lose(){
+  if(state.lose) return;
+  state.lose = true;
+  showMessage('你被打败了……再试一次');
+  render();
+  state.running = false;
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.textContent = "不玩了";
+  continueBtn.classList.add('secondary');
+  continueBtn.addEventListener('click', failHandler);
+}
+function showMessage(txt){ messageEl.textContent = txt; messageEl.style.display = 'block'; }
+
+/* fail/success handler（供父窗口通信） */
+function successHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:true, action:"continue" }, "*"); } window.close(); }
+function failHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:false, action:"giveup" }, "*"); } window.close(); }
+
+/* ========== 渲染 ========== */
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // grid
+  for(let i=0;i<cellCount;i++){
+    for(let j=0;j<cellCount;j++){
+      const x = i*cellSize, y = j*cellSize;
+      ctx.fillStyle = ((i+j)%2===0) ? '#0b6b1f' : '#0a5b17';
+      ctx.fillRect(x+1, y+1, cellSize-2, cellSize-2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)'; ctx.strokeRect(x+0.5, y+0.5, cellSize, cellSize);
+    }
+  }
+
+  // particles
+  state.particles.forEach(p=>{
+    if(p.text){
+      ctx.font = "14px serif";
+      ctx.fillStyle = "rgba(255,255,255," + (p.life/30) + ")";
+      ctx.fillText(p.text, p.x, p.y);
+    } else {
+      ctx.globalAlpha = Math.max(0, p.life/36);
+      ctx.fillStyle = p.bright ? 'rgba(255,240,200,0.95)' : 'rgba(255,255,255,0.9)';
+      ctx.fillRect(p.x-2, p.y-2, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  // bullets
+  state.bullets.forEach(b=>{
+    const px = b.x * cellSize, py = b.y * cellSize;
+    ctx.beginPath();
+    if(b.from === 'player') ctx.fillStyle = 'rgba(180,200,255,0.95)';
+    else if(b.isMinion) ctx.fillStyle = 'rgba(255,220,120,0.95)';
+    else ctx.fillStyle = 'rgba(255,180,160,0.95)';
+    ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    const grad = ctx.createRadialGradient(px, py, 2, px, py, 12);
+    if(b.from === 'player'){ grad.addColorStop(0, 'rgba(200,220,255,1)'); grad.addColorStop(1, 'rgba(80,120,255,0)'); }
+    else { grad.addColorStop(0, 'rgba(255,200,180,1)'); grad.addColorStop(1, 'rgba(255,80,60,0)'); }
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = (b.from==='player')? '#bbf' : (b.isMinion? '#fb0' : '#f88'); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  // boss draw (2x2)
+  if(state.boss){
+    const b = state.boss;
+    const px = b.animX * cellSize, py = b.animY * cellSize;
+    const w = cellSize * b.size, h = cellSize * b.size;
+    if(images.boss){ ctx.drawImage(images.boss, px+2, py+2, w-4, h-4); }
+    else {
+      const grad = ctx.createLinearGradient(px, py, px+w, py+h);
+      grad.addColorStop(0, '#8b1f1f'); grad.addColorStop(1, '#4b0f0f');
+      ctx.fillStyle = grad; ctx.fillRect(px+4, py+4, w-8, h-8);
+    }
+    // 护盾效果
+    if(b.shielded){
+      ctx.save();
+      ctx.globalAlpha = 0.65;
+      ctx.strokeStyle = 'rgba(120,200,255,0.9)';
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(px + w/2, py + h/2, Math.max(w,h)*0.9, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+    // hp bar above boss
+    ctx.fillStyle = '#000'; ctx.fillRect(px, py-8, w, 6);
+    ctx.fillStyle = '#e33'; ctx.fillRect(px, py-8, Math.max(0, (b.hp/b.maxHp)*w), 6);
+    // skill icon
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px sans-serif';
+    ctx.fillText('BOSS', px + 6, py + 14);
+  }
+
+  // player
+  const ppx = state.player.animX * cellSize, ppy = state.player.animY * cellSize;
+  if(images.player){ ctx.drawImage(images.player, ppx+2, ppy+2, cellSize-4, cellSize-4); }
+  else { ctx.fillStyle='#33a'; ctx.fillRect(ppx+4, ppy+4, cellSize-8, cellSize-8); }
+  ctx.fillStyle='#222'; ctx.fillRect(ppx+3, ppy+3, cellSize-6, 6);
+  ctx.fillStyle='#0a0'; ctx.fillRect(ppx+3, ppy+3, Math.max(0, (state.player.hp/state.player.maxHp)*(cellSize-6)), 6);
+}
+
+/* ========== 初始化 ========== */
+if(!images.player && !images.boss && totalImgs === 2){ /* images may fail but start() waits */ }
+if(totalImgs === 0) start();
+else { setTimeout(()=>{ if(loadedImgs < totalImgs && !state.boss) start(); }, 600); }
+
+/* ========== 辅助：父窗口通信 ========== */
+
+/* ========== 结束 ========== */
+</script>
+
+<!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/追求.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>

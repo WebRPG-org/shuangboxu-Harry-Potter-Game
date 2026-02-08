@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>大鱼吃小鱼 — HTML5小游戏</title>
+  <style>
+    :root{
+      --bg1:#001d2e;
+      --bg2:#003347;
+      --panel: rgba(255,255,255,0.08);
+      --accent: #ffd66b;
+      --accent2: #ff8aa6;
+      --glass: rgba(255,255,255,0.06);
+    }
+    html,body{height:100%;margin:0;font-family:Inter, "PingFang SC", "Microsoft YaHei", sans-serif;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#e6f7ff;overflow:hidden}
+    #game-wrap{position:relative;width:100%;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    canvas{display:block;border-radius:12px;box-shadow:0 10px 30px rgba(4,10,20,0.6), inset 0 1px 0 rgba(255,255,255,0.02);background:linear-gradient(180deg,#002236,#001220)}
+    .ui{position:absolute;left:18px;top:18px;z-index:10;display:flex;gap:8px;align-items:center}
+    .panel{background:var(--panel);backdrop-filter: blur(6px);border-radius:10px;padding:8px 12px;font-weight:600;color:var(--accent);box-shadow:0 6px 18px rgba(2,8,18,0.6)}
+    .panel small{display:block;font-weight:400;color:rgba(255,255,255,0.6);font-size:12px}
+    .controls{position:absolute;right:18px;top:18px;z-index:10}
+    .btn{background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--accent);cursor:pointer;font-weight:700}
+    .center-ui{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;z-index:12}
+    .title{font-size:36px;margin-bottom:6px}
+    .hint{font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:14px}
+    .scoreboard{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);z-index:11;background:var(--glass);padding:8px 14px;border-radius:12px;font-weight:700}
+    @media (max-width:700px){.title{font-size:28px}}
+  </style>
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game" width="1100" height="650"></canvas>
+
+    <div class="ui">
+      <div class="panel" id="score">得分: <span id="scoreVal">0</span><small id="levelText">等级: 1</small></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="pauseBtn">暂停</button>
+      <button class="btn" id="restartBtn">重新开始</button>
+    </div>
+
+    <div class="center-ui" id="menu">
+      <div class="title">大鱼吃小鱼</div>
+      <div class="hint">鼠标或方向键/WASD移动大鱼，吃小鱼成长，躲避大鱼！</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn" id="startBtn">开始游戏</button>
+        <button class="btn" id="howBtn">操作说明</button>
+      </div>
+    </div>
+
+    <div class="scoreboard" id="gameOver" style="display:none">游戏结束 — 得分：<span id="finalScore">0</span></div>
+  </div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let W = canvas.width; let H = canvas.height;
+
+  function resizeCanvas(){
+    const ratio = 16/9;
+    let ww = Math.min(window.innerWidth - 40, 1200);
+    let hh = Math.min(window.innerHeight - 80, 720);
+    if(ww / hh > ratio) ww = Math.round(hh * ratio);
+    else hh = Math.round(ww / ratio);
+    canvas.width = W = ww; canvas.height = H = hh;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  let running=false, paused=false;
+  let mouse={x:W/2,y:H/2};
+  let keyState={};
+  let score=0,level=1;
+
+  class Player{
+    constructor(){this.x=W/2;this.y=H/2;this.size=30;this.speed=3;this.color='#ffd66b';}
+    update(){
+      let vx=0,vy=0;
+      if(keyState['ArrowUp']||keyState['w']) vy-=1;
+      if(keyState['ArrowDown']||keyState['s']) vy+=1;
+      if(keyState['ArrowLeft']||keyState['a']) vx-=1;
+      if(keyState['ArrowRight']||keyState['d']) vx+=1;
+      if(vx||vy){
+        const l=Math.hypot(vx,vy)||1;
+        this.x+=vx/l*this.speed; this.y+=vy/l*this.speed;
+      } else {
+        const dx=mouse.x-this.x, dy=mouse.y-this.y;
+        const dist=Math.hypot(dx,dy)||1;
+        this.x+=dx/dist*Math.min(dist,this.speed);
+        this.y+=dy/dist*Math.min(dist,this.speed);
+      }
+      this.x=Math.max(this.size,Math.min(W-this.size,this.x));
+      this.y=Math.max(this.size,Math.min(H-this.size,this.y));
+    }
+    draw(){drawFish(ctx,this.x,this.y,this.size,this.color,true);}
+    grow(by){this.size=Math.min(this.size+by*0.2,160);}
+  }
+
+  class Fish{
+    constructor(o){this.x=o.x;this.y=o.y;this.size=o.size;this.speed=o.speed;this.dir=Math.random()*Math.PI*2;this.color=o.color;}
+    update(){this.x+=Math.cos(this.dir)*this.speed;this.y+=Math.sin(this.dir)*this.speed;
+      if(this.x<-50) this.x=W+10; if(this.x>W+50) this.x=-10; if(this.y<-50) this.y=H+10; if(this.y>H+50) this.y=-10;
+    }
+    draw(){drawFish(ctx,this.x,this.y,this.size,this.color,false);}
+  }
+
+  function drawFish(ctx,x,y,size,color,isPlayer){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle=color; ctx.beginPath(); ctx.ellipse(0,0,size*1.2,size,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-size*1.1,0); ctx.lineTo(-size*1.5,-size*0.7); ctx.lineTo(-size*1.5,size*0.7); ctx.closePath(); ctx.fill();
+    if(isPlayer){ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(size*0.3,-size*0.15,size*0.15,0,Math.PI*2); ctx.fill();}
+    ctx.restore();
+  }
+
+  function randomColor(){return ['#ff8aa6','#7fffbf','#ffd37a','#9ad0ff'][Math.floor(Math.random()*4)];}
+
+  let fishes=[];
+  function spawnFish(n){for(let i=0;i<n;i++){let s=8+Math.random()*40; let sp=Math.max(0.6,2.5-s/40); let x=Math.random()*W; let y=Math.random()*H; fishes.push(new Fish({x,y,size:s,speed:sp,color:randomColor()}));}}
+
+  function coll(a,b){return Math.hypot(a.x-b.x,a.y-b.y)<(a.size+b.size)*0.9;}
+
+  const player=new Player();
+  function resetGame(){score=0;level=1;fishes=[];player.size=30;player.x=W/2;player.y=H/2;spawnFish(12);updateUI();}
+
+  function updateUI(){document.getElementById('scoreVal').textContent=Math.floor(score);document.getElementById('levelText').textContent='等级:'+level;}
+
+  let last=performance.now();
+  function loop(now){if(!running){requestAnimationFrame(loop);return;} if(paused){drawPauseOverlay(); requestAnimationFrame(loop);return;}
+    ctx.clearRect(0,0,W,H);
+    player.update();
+    for(let f of fishes) f.update();
+    for(let i=fishes.length-1;i>=0;i--){let f=fishes[i];if(coll(player,f)){if(player.size>f.size){score+=Math.round(f.size*2);player.grow(f.size/6);fishes.splice(i,1);} else {endGame();return;}}}
+    if(fishes.length<10+level) spawnFish(1);
+    if(score>level*200) level++;
+    for(let f of fishes) f.draw(); player.draw(); updateUI();
+    requestAnimationFrame(loop);
+  }
+
+  function drawPauseOverlay(){ctx.save();ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff';ctx.font='24px sans-serif';ctx.textAlign='center';ctx.fillText('已暂停',W/2,H/2);ctx.restore();}
+
+  function endGame(){running=false;paused=false;document.getElementById('menu').style.display='none';let el=document.getElementById('gameOver');el.style.display='block';document.getElementById('finalScore').textContent=Math.floor(score);}
+
+  document.getElementById('startBtn').onclick=()=>{startGame();};
+  document.getElementById('howBtn').onclick=()=>{alert('操作:\n- 鼠标或方向键/WASD 移动\n- 吃掉比你小的鱼成长\n- 碰到比你大的鱼则失败');};
+  document.getElementById('pauseBtn').onclick=()=>{togglePause();};
+  document.getElementById('restartBtn').onclick=()=>{resetGame();startGame();};
+
+  function startGame(){document.getElementById('menu').style.display='none';document.getElementById('gameOver').style.display='none';running=true;paused=false;resetGame();last=performance.now();requestAnimationFrame(loop);}
+  function togglePause(){if(!running)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'继续':'暂停';}
+
+  canvas.addEventListener('mousemove',e=>{const r=canvas.getBoundingClientRect();mouse.x=(e.clientX-r.left)*(canvas.width/r.width);mouse.y=(e.clientY-r.top)*(canvas.height/r.height);});
+  window.addEventListener('keydown',e=>{keyState[e.key]=true;if(e.key===' ')togglePause();});
+  window.addEventListener('keyup',e=>{keyState[e.key]=false;});
+
+  spawnFish(12);
+})();
+</script>
+</body>
+</html>

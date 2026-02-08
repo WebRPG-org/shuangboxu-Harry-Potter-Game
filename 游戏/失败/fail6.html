@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏失败5</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/fail6.png") no-repeat center center/cover;
+      font-family: "KaiTi", "Microsoft YaHei", sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 右上角按钮 */
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 居中文字 */
+    .text-box {
+      margin: auto;
+      text-align: center;
+      max-width: 80%;
+      line-height: 1.8;
+      padding: 25px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 14px;
+      box-shadow: 0 0 20px rgba(100, 100, 100, 0.5);
+      animation: fadeIn 2s ease;
+    }
+
+    .line {
+      font-size: 26px;
+      color: #e0e0e0;
+      margin: 15px 0;
+      opacity: 0;
+      animation: fadeInText 2s forwards;
+    }
+
+    .line1 { animation-delay: 0.5s; }
+    .line2 { animation-delay: 2s; }
+    .line3 { animation-delay: 3.5s; }
+    .line4 { animation-delay: 5s; }
+
+    @keyframes fadeInText {
+      from { opacity: 0; text-shadow: none; }
+      to { opacity: 1; text-shadow: 0 0 10px #666, 0 0 15px #aaa; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* 破碎羽毛特效 */
+    .feather {
+      position: absolute;
+      font-size: 20px;
+      color: #ccc;
+      animation: fall 6s linear forwards;
+      opacity: 0.8;
+    }
+
+    @keyframes fall {
+      0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+    }
+    
+    /* 爱心碎裂特效 */
+    .heart {
+      position: absolute;
+      font-size: 24px;
+      color: #ff4d6d;
+      animation: fall 4s linear forwards;
+      opacity: 0.9;
+    }
+
+    @keyframes fall {
+      0% { transform: translateY(-50px) scale(1); opacity: 1; }
+      70% { transform: translateY(80vh) scale(0.8) rotate(20deg); opacity: 0.7; }
+      100% { transform: translateY(100vh) scale(0.5) rotate(-30deg); opacity: 0; }
+    }
+
+    /* 雪花特效 */
+    .snow {
+      position: absolute;
+      color: #fff;
+      font-size: 12px;
+      opacity: 0.9;
+      animation: snowFall linear forwards;
+    }
+
+    @keyframes snowFall {
+      0% { transform: translateY(-10px); opacity: 1; }
+      100% { transform: translateY(100vh); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(6, '../reality.html')">返回菜单</a>
+
+  <!-- 右上角跳到page.html第6页 -->
+  <!-- <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(7, '../page.html?page=6')">重新选择（仅测试使用）</a> -->
+
+  <!-- 文字内容 -->
+  <div class="text-box">
+    <div class="line line1">你没有选择去完成小游戏。</div>
+    <div class="line line2">在莉莉看来，这是一次无声的逃避。</div>
+    <div class="line line3">她轻轻叹了口气，目光中透出失望与无奈。</div>
+    <div class="line line4">“或许，我们本就不是一路人。”——这段关系，在沉默中画上了句点。</div>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+  <!-- 动态生成羽毛飘落 -->
+  <script>
+    function createFeather() {
+      const feather = document.createElement("div");
+      feather.classList.add("feather");
+      feather.innerHTML = "🪶";
+      feather.style.left = Math.random() * window.innerWidth + "px";
+      feather.style.fontSize = (16 + Math.random() * 10) + "px";
+      feather.style.animationDuration = (5 + Math.random() * 3) + "s";
+      document.body.appendChild(feather);
+      setTimeout(() => feather.remove(), 9000);
+    }
+    setInterval(createFeather, 600);
+  </script>
+    <!-- 动态生成爱心碎裂 & 雪花 -->
+  <script>
+    // 💔 碎心雨
+    function createHeart() {
+      const heart = document.createElement("div");
+      heart.classList.add("heart");
+      heart.innerHTML = "💔";
+      heart.style.left = Math.random() * window.innerWidth + "px";
+      heart.style.animationDuration = (3 + Math.random() * 2) + "s";
+      document.body.appendChild(heart);
+      setTimeout(() => heart.remove(), 5000);
+    }
+    setInterval(createHeart, 800);
+
+    // ❄️ 下雪
+    function createSnow() {
+      const snow = document.createElement("div");
+      snow.classList.add("snow");
+      snow.innerHTML = "❄";
+      snow.style.left = Math.random() * window.innerWidth + "px";
+      snow.style.fontSize = (10 + Math.random() * 15) + "px";
+      snow.style.animationDuration = (4 + Math.random() * 3) + "s";
+      document.body.appendChild(snow);
+      setTimeout(() => snow.remove(), 7000);
+    }
+    setInterval(createSnow, 200);
+  </script>
+
+  <script src="../achievements.js"></script>
+  <script src="../results.js"></script>
+</body>
+</html>

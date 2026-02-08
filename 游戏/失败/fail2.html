@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏失败2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/fail2.png") no-repeat center center/cover;
+      font-family: "Cinzel", "Times New Roman", serif; /* 更庄重魔法感的字体 */
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+
+    /* 左上角返回按钮 */
+    .back-btn,
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      text-decoration: none;
+      color: #eee;
+      font-size: 16px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn { left: 20px; }
+    .next-btn { right: 20px; }
+    .back-btn:hover, .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    /* 居中文字 */
+    .text-box {
+      margin: auto;
+      text-align: center;
+      max-width: 80%;
+      line-height: 1.8;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 12px;
+      letter-spacing: 1px;
+      text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    }
+
+    .line {
+      margin: 18px 0;
+      opacity: 0;
+    }
+
+    /* 第一行：缓慢淡入，带点压抑感 */
+    .line1 {
+      font-size: 26px;
+      color: #ffb3b3;
+      animation: fadeIn 3s forwards;
+    }
+
+    /* 第二行：逐渐显现，稍微带模糊感 */
+    .line2 {
+      font-size: 24px;
+      color: #e8e6e3;
+      filter: blur(4px);
+      animation: clearIn 3s forwards;
+      animation-delay: 3s;
+    }
+
+    /* 第三行：往下沉的效果 */
+    .line3 {
+      font-size: 22px;
+      color: #d6d6d6;
+      animation: sinkIn 3s forwards;
+      animation-delay: 6s;
+    }
+
+    /* 第四行：幽灵闪烁，突出失落 */
+    .line4 {
+      font-size: 20px;
+      color: #a3b9ff;
+      font-style: italic;
+      animation: ghostBlink 3s infinite;
+      animation-delay: 9s;
+    }
+
+    /* 动画 */
+    @keyframes fadeIn {
+      from { opacity: 0 }
+      to { opacity: 1 }
+    }
+    @keyframes clearIn {
+      from { opacity: 0; filter: blur(6px); }
+      to { opacity: 1; filter: blur(0); }
+    }
+    @keyframes sinkIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ghostBlink {
+      0%, 100% { opacity: 0.2; text-shadow: 0 0 6px #7aa2ff; }
+      50% { opacity: 1; text-shadow: 0 0 18px #c6d8ff; }
+    }
+  </style>
+
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+
+
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(2, '../reality.html')">返回菜单</a>
+
+  <!-- 右上角跳到page.html第6页 -->
+  <!-- <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(2, '../page.html?page=6')">重新选择（仅测试使用）</a> -->
+
+  <!-- 文字内容 -->
+  <div class="text-box">
+    <div class="line line1">你和西弗勒斯的打斗引来院长麦格教授</div>
+    <div class="line line2">被罚留堂查看\帮助费尔奇清扫奖品室</div>
+    <div class="line line3">西弗勒斯在校医院躺了一个星期才醒过来</div>
+    <div class="line line4">莉莉对你的好感度也因此直线下降</div>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+
+<script src="../achievements.js"></script>
+<script src="../results.js"></script>
+
+
+<canvas id="lightningCanvas"></canvas>
+
+<style>
+  #lightningCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+  }
+
+  /* 全屏闪光层 */
+  #flashOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9998;
+  }
+</style>
+
+<div id="flashOverlay"></div>
+
+<script>
+  const canvas = document.getElementById("lightningCanvas");
+  const ctx = canvas.getContext("2d");
+  const flashOverlay = document.getElementById("flashOverlay");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const thunderSounds = [
+    "../musics/打雷声音.flav",
+    "../musics/打雷声音2.mp3",
+    "../musics/打雷声音3.mp3",
+    "../musics/打雷声音4.mp3"
+  ];
+
+  function playThunderSound() {
+    const audio = new Audio(thunderSounds[Math.floor(Math.random() * thunderSounds.length)]);
+    audio.volume = 0.5 + Math.random() * 0.5; // 随机音量 0.5~1.0
+    audio.play();
+  }
+
+  function drawLightning(startX, startY) {
+    const colors = ["#ffffff", "#aaccff", "#c6a3ff"];
+    ctx.strokeStyle = colors[Math.floor(Math.random() * colors.length)];
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 1.5 + Math.random() * 2.5;
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+
+    let segments = 8 + Math.floor(Math.random() * 6); // 段数
+    let currentX = startX;
+    let currentY = startY;
+
+    for (let i = 0; i < segments; i++) {
+      currentX += (Math.random() - 0.5) * 80;
+      currentY += 40 + Math.random() * 60;
+      ctx.lineTo(currentX, currentY);
+
+      // 随机分叉
+      if (Math.random() < 0.3) {
+        ctx.moveTo(currentX, currentY);
+        let forkX = currentX + (Math.random() - 0.5) * 60;
+        let forkY = currentY + 30 + Math.random() * 50;
+        ctx.lineTo(forkX, forkY);
+      }
+    }
+
+    ctx.stroke();
+  }
+
+  function lightningFlash() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let startX = Math.random() * canvas.width;
+    let startY = 0; // 从天空顶端
+    drawLightning(startX, startY);
+
+    // 屏幕闪光效果
+    flashOverlay.style.transition = "none";
+    flashOverlay.style.opacity = "0.8";
+    setTimeout(() => {
+      flashOverlay.style.transition = "opacity 0.2s";
+      flashOverlay.style.opacity = "0";
+    }, 80);
+
+    // 清除闪电图案
+    setTimeout(() => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }, 200);
+
+    // 延迟播放雷声
+    const delay = 500 + Math.random() * 1000; // 0.5~1.5秒
+    setTimeout(playThunderSound, delay);
+  }
+
+  // 随机时间触发
+  setInterval(() => {
+    if (Math.random() < 0.25) { // 25% 概率
+      lightningFlash();
+    }
+  }, 1000);
+
+  window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  });
+</script>
+
+</body>
+</html>

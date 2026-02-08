@@ -1,0 +1,674 @@
+<!doctype html> 
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>地铁跑酷 — 3D 单文件示例（含金币）</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b0f14;font-family:system-ui,Segoe UI,Roboto,'PingFang SC',"Microsoft YaHei"}
+    #container{position:fixed;inset:0}
+    /* #ui{position:fixed;left:16px;top:16px;z-index:20;color:#c23c3c} */
+ #ui {
+  position: fixed;
+  left: 16px;
+  top: 60px; /* 原来是 16px，可以改大一点 */
+  z-index: 20;
+  color: #c23c3c;
+}
+ 
+  
+    #score{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
+    #coinIcon{width:22px;height:22px;vertical-align:middle}
+    #coinCount{font-weight:700}
+    #msg{margin-top:8px;opacity:.95}
+    .btn{background:linear-gradient(90deg,#ff6b6b,#ff8e53);padding:8px 12px;border-radius:8px;border:none;color:#fff;font-weight:700;cursor:pointer}
+    #help{position:fixed;right:16px;top:16px;color:#cfe8ff;opacity:.9;text-align:right;z-index:10}
+    #footer{position:fixed;right:16px;bottom:16px;color:#94a3b8;font-size:12px;z-index:10}
+    canvas{display:block}
+    #backBtn{position:fixed;left:12px;top:12px;z-index:30;background:transparent;border:none;color:#000000;font-weight:700;padding:6px 10px;border-radius:6px;cursor:pointer}
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:40;pointer-events:none}
+    #gameOverPanel{min-width:320px;background:rgba(0,0,0,0.7);color:#fff;padding:18px;border-radius:12px;text-align:center;pointer-events:auto;display:none}
+    #gameOverPanel h2{margin:0 0 8px 0}
+    #gameOverPanel .small{font-size:13px;color:#cfe8ff}
+    #highscore{font-size:14px;margin-top:6px;color:#ffd166}
+    .btn-row{margin-top:12px;display:flex;gap:10px;justify-content:center}
+    #hi{font-size:13px;color:#ffd166;margin-top:6px}
+    .muted{color:#9aa7bb;font-size:13px}
+    /* 分数细节 */
+    .score-break{margin-top:8px;text-align:left;padding:8px;background:rgba(251, 214, 4, 0.02);border-radius:8px;font-size:14px}
+
+    /* 新增自动按钮样式 */
+    #autoBtn{margin-left:10px;background:linear-gradient(90deg,#3b82f6,#06b6d4)}
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <button id="backBtn" title="返回">← 返回</button>
+
+  <div id="ui">
+    <div id="score">
+      <div id="scoreText"><br>得分: 0</div>
+      <div id="coinUI" style="display:flex;align-items:center;gap:6px;">
+        <img id="coinIcon" src="../images/金币.png" alt="coin">
+        <div id="coinCount">0</div>
+      </div>
+    </div>
+    <div id="hi">最高分: 0</div>
+    <div id="msg">
+      <button id="startBtn" class="btn">开始游戏</button>
+      <button id="restartBtn" class="btn" style="display:none">重新开始</button>
+      <button id="autoBtn" class="btn" title="F键切换自动躲避">自动：关</button>
+    </div>
+  </div>
+
+  <div id="help">控制：←/A 右/→/D 切换轨道，↑/W 跳跃，↓/S 趴下（或手机上下滑动）。按 F 切换自动躲避。</div>
+  <div id="footer">3D 地铁跑酷示例 — 障碍图像位于 <code>../images/</code></div>
+
+  <div id="overlay">
+    <div id="gameOverPanel">
+      <h2 id="goTitle">游戏结束</h2>
+      <div id="finalScore">得分: 0</div>
+      <div id="scoreBreak" class="score-break" style="display:none">
+        <div id="baseLine">基础分: 0</div>
+        <div id="coinsLine">金币数: 0</div>
+        <div id="coinBonusLine">金币加成: 0</div>
+        <div id="totalLine" style="font-weight:700;margin-top:6px">总分: 0</div>
+      </div>
+      <div id="highscore" style="display:none">最高分: 0（新纪录！）</div>
+      <div class="small muted">按重新开始重试，或选择别的游戏</div>
+      <div class="btn-row">
+        <button id="goRestart" class="btn">重新开始</button>
+        <button id="goOther" class="btn">别的游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js CDN -->
+  <script src="https://unpkg.com/three@0.154.0/build/three.min.js"></script>
+  <script>
+  // ---------------------- 配置（可修改） ----------------------
+  const LANES = [-2.4, 0, 2.4]; // 三条轨道 x 坐标
+  const PLAYER_IMAGE = '../images/01.png';
+
+  // 障碍定义（低/高/中）
+  const OBSTACLE_DEFS = [
+    {img: '../images/char1.png', type: 'mustJump'}, // 低 — 必须跳过（不能钻）
+    {img: '../images/char8.png', type: 'mustSlide'}, // 高 — 必须钻/趴过（不能跳）
+    {img: '../images/char3.png', type: 'either'}     // 中间 — 跳 或 趴 都可以
+  ];
+
+  const BACKGROUND_IMAGE = '../images/bg.jpg';
+  const COIN_IMAGE = '../images/金币.png';
+  const COIN_VALUE = 50; // 每枚金币分数（可调整）
+  const HIGHSCORE_KEY = 'subway_highscore';
+  // -----------------------------------------------------------
+
+  // 全局变量
+  let scene, camera, renderer, clock;
+  let player;
+  let obstacles = [];
+  let coins = [];
+  let spawnTimer = 0;
+  let spawnCoinTimer = 0;
+  let baseScore = 0; // 基础分（障碍通过、时间等）
+  let coinCount = 0;
+  let speed = 0.2; // 障碍移动系数（会根据 baseScore 增长，无上限）
+  let isRunning = false;
+  let targetLane = 1; // 中间
+  let velocityY = 0;
+  let gravity = -0.018;
+  let isSliding = false;
+  let slideTimer = 0;
+
+  // 自动躲避相关
+  let autoAvoid = false;
+  const autoBtn = document.getElementById('autoBtn');
+  const AUTO_REACTION_TIME = 1.2; // s：AI 会对接下来这段时间内到达的障碍做出动作（可调）
+  const AUTO_LOOKAHEAD_MIN = 0.5; // 最短反应时间阈值（秒）
+
+  const container = document.getElementById('container');
+  const scoreTextEl = document.getElementById('scoreText');
+  const coinCountEl = document.getElementById('coinCount');
+  const hiEl = document.getElementById('hi');
+  const startBtn = document.getElementById('startBtn');
+  const restartBtn = document.getElementById('restartBtn');
+  const backBtn = document.getElementById('backBtn');
+
+  const overlay = document.getElementById('overlay');
+  const gameOverPanel = document.getElementById('gameOverPanel');
+  const finalScoreEl = document.getElementById('finalScore');
+  const scoreBreakEl = document.getElementById('scoreBreak');
+  const baseLineEl = document.getElementById('baseLine');
+  const coinsLineEl = document.getElementById('coinsLine');
+  const coinBonusLineEl = document.getElementById('coinBonusLine');
+  const totalLineEl = document.getElementById('totalLine');
+  const highscoreEl = document.getElementById('highscore');
+  const goRestart = document.getElementById('goRestart');
+  const goOther = document.getElementById('goOther');
+
+  // 读取本地最高分
+  let storedHigh = parseInt(localStorage.getItem(HIGHSCORE_KEY) || '0', 10);
+  hiEl.textContent = '最高分: ' + storedHigh;
+
+  // 初始化 Three.js 场景
+  function init(){
+    scene = new THREE.Scene();
+    clock = new THREE.Clock();
+
+    // 背景
+    const loader = new THREE.TextureLoader();
+    loader.load(BACKGROUND_IMAGE, tex=>{
+      scene.background = tex;
+    }, undefined, ()=>{ /* 忽略错误 */ });
+
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(0, 4.2, 7.2);
+    camera.lookAt(0,1.4,0);
+
+    renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // 光
+    const amb = new THREE.HemisphereLight(0xffffff,0x444444, 0.9);
+    scene.add(amb);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(5, 10, 2);
+    dir.castShadow = true;
+    scene.add(dir);
+
+    // 地面（长条轨道）
+    const groundGeo = new THREE.PlaneGeometry(20, 200);
+    const groundMat = new THREE.MeshStandardMaterial({color:0x10151a});
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // 三条轨道线
+    for(let i=0;i<3;i++){
+      const g = new THREE.BoxGeometry(3, 0.05, 200);
+      const m = new THREE.MeshStandardMaterial({color:0x111827});
+      const rail = new THREE.Mesh(g,m);
+      rail.position.set(LANES[i], 0.02, -80);
+      scene.add(rail);
+    }
+
+    // 玩家（方形）
+    const playerGeo = new THREE.BoxGeometry(1,1,1);
+    const playerMat = new THREE.MeshStandardMaterial({color:0xffae00});
+    player = new THREE.Mesh(playerGeo, playerMat);
+    player.castShadow = true;
+    player.position.set(LANES[targetLane], 0.5, 1.2);
+    scene.add(player);
+
+    // 加载玩家贴图
+    loader.load(PLAYER_IMAGE,tex=>{
+      player.material.map = tex;
+      player.material.needsUpdate = true;
+    }, ()=>{}, ()=>{});
+
+    // 绑定事件
+    window.addEventListener('resize', onResize);
+    window.addEventListener('keydown', onKey);
+    // 触摸支持（简单左右滑动/上下滑动）
+    let touchStart = null;
+    window.addEventListener('touchstart', e=>{ touchStart = e.touches[0]; });
+    window.addEventListener('touchend', e=>{
+      if(!touchStart) return;
+      const end = e.changedTouches[0];
+      const dx = end.clientX - touchStart.clientX;
+      const dy = end.clientY - touchStart.clientY;
+      if(Math.abs(dx) > Math.abs(dy)){
+        if(dx>30) moveRight(); else if(dx<-30) moveLeft();
+      } else {
+        if(dy<-40) jump(); else if(dy>40) slide();
+      }
+      touchStart = null;
+    });
+
+    animate();
+  }
+
+  function onResize(){
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function onKey(e){
+    const k = e.key.toLowerCase();
+    if(!isRunning){
+      if(k === ' ' || k === 'enter') startGame();
+      return;
+    }
+    if(k==='arrowleft' || k==='a') moveLeft();
+    if(k==='arrowright' || k==='d') moveRight();
+    if(k==='arrowup' || k==='w') jump();
+    if(k==='arrowdown' || k==='s') slide();
+    if(k === 'f'){ toggleAuto(); } // F 切换自动
+  }
+
+  function moveLeft(){ if(targetLane>0) targetLane--; }
+  function moveRight(){ if(targetLane<LANES.length-1) targetLane++; }
+
+  function jump(){ 
+    if(Math.abs(player.position.y - 0.5) < 0.02 && !isSliding){ 
+      velocityY = 0.48; 
+    } 
+  }
+  function slide(){ 
+    if(Math.abs(player.position.y - 0.5) < 0.02 && !isSliding){ 
+      isSliding = true; slideTimer = 0.7; 
+      player.scale.y = 0.55; 
+      player.position.y = 0.5 * player.scale.y;
+    } 
+  }
+
+  // 切换自动躲避
+  function toggleAuto(){
+    autoAvoid = !autoAvoid;
+    autoBtn.textContent = '自动：' + (autoAvoid ? '开' : '关');
+    autoBtn.title = autoAvoid ? '自动躲避：开（按 F 关闭）' : '自动躲避：关（按 F 打开）';
+  }
+  autoBtn.addEventListener('click', toggleAuto);
+
+  // 生成障碍
+  function spawnObstacle(){
+    const lane = Math.floor(Math.random()*LANES.length);
+    const r = Math.random();
+    let def;
+    if(r < 0.42) def = OBSTACLE_DEFS[0]; // 低（mustJump）
+    else if(r < 0.74) def = OBSTACLE_DEFS[2]; // 中间（either）
+    else def = OBSTACLE_DEFS[1]; // 高（mustSlide）
+    const texLoader = new THREE.TextureLoader();
+
+    // 16:9 比例：宽:高 = 16:9 -> 宽设为 1.6，高设为 0.9，深度设为 0.9
+    const width = 1.6, height = 0.9, depth = 0.9;
+    const geo = new THREE.BoxGeometry(width, height, depth);
+    const mat = new THREE.MeshStandardMaterial({color:0xffffff});
+    const mesh = new THREE.Mesh(geo, mat);
+
+    // 根据类型设置中心高度（y）
+    if(def.type === 'mustJump'){
+      // 低障碍，中心较低（玩家需要跳起才能通过）
+      mesh.position.y = 0.45;
+      mesh.scale.z = 1.0;
+    } else if(def.type === 'either'){
+      // 中间悬浮：center y 在玩家头部中间位置
+      mesh.position.y = 1.15;
+      mesh.scale.z = 0.9;
+    } else if(def.type === 'mustSlide'){
+      // 高位悬浮，必须趴下（钻）才能通过
+      mesh.position.y = 2.05;
+      mesh.scale.z = 0.8;
+    }
+
+    mesh.position.set(LANES[lane], mesh.position.y, -60);
+    mesh.castShadow = true;
+    mesh.userData = { type: def.type, img: def.img, laneIndex: lane };
+
+    // 贴图加载
+    texLoader.load(def.img, t=>{ 
+      mesh.material.map = t; 
+      mesh.material.needsUpdate = true; 
+    }, ()=>{}, ()=>{});
+
+    scene.add(mesh);
+    obstacles.push(mesh);
+  }
+
+  // 生成金币
+  function spawnCoin(){
+    const lane = Math.floor(Math.random()*LANES.length);
+    const texLoader = new THREE.TextureLoader();
+    const geo = new THREE.SphereGeometry(0.28, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({color:0xffff00});
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(LANES[lane], 1.2, -60); // 稍高，方便收集
+    mesh.castShadow = true;
+    // 贴图
+    texLoader.load(COIN_IMAGE, t=>{
+      mesh.material.map = t;
+      mesh.material.needsUpdate = true;
+    }, ()=>{}, ()=>{});
+    mesh.userData = { isCoin: true, laneIndex: lane };
+    scene.add(mesh);
+    coins.push(mesh);
+  }
+
+  // 检测与处理金币拾取
+  function tryCollectCoin(playerObj){
+    for(let i=coins.length-1;i>=0;i--){
+      const coin = coins[i];
+      // 简单包围盒检测
+      const a = new THREE.Box3().setFromObject(playerObj);
+      const b = new THREE.Box3().setFromObject(coin);
+      if(a.intersectsBox(b)){
+        // 收集
+        scene.remove(coin);
+        coins.splice(i,1);
+        coinCount += 1;
+        coinCountEl.textContent = coinCount;
+      }
+    }
+  }
+
+  // 碰撞检测（轴对齐包围盒近似）
+  function checkCollisionLogic(playerObj, obstacleObj){
+    const a = new THREE.Box3().setFromObject(playerObj);
+    const b = new THREE.Box3().setFromObject(obstacleObj);
+    if(!a.intersectsBox(b)) return false; // 根本没接触
+
+    const t = obstacleObj.userData.type;
+    if(t === 'mustJump'){
+      // 低的：玩家必须跳起（center 高于阈值）才能安全
+      if(player.position.y > 1.05) return false;
+      else return true;
+    } else if(t === 'mustSlide'){
+      // 高的：玩家必须趴下（isSliding）才能安全
+      if(isSliding) return false;
+      else return true;
+    } else if(t === 'either'){
+      // 中间：趴下 或 跳起 都可
+      if(isSliding) return false;
+      if(player.position.y > 1.05) return false;
+      return true;
+    }
+    return true;
+  }
+
+  // 自动躲避逻辑（每帧运行）
+  function autoAvoidLogic(dt){
+    if(!autoAvoid || !isRunning) return;
+
+    // 先计算障碍相对速度（场景中使用的速度）
+    const velocity = speed * 120 * 0.35; // units per second (approx)
+
+    // 找出在 reaction window 内即将到达的障碍（按时间排序）
+    const dangerList = [];
+    for(const ob of obstacles){
+      const dist = player.position.z - ob.position.z; // 正值表示障碍在前方到玩家的距离
+      if(dist <= 0) continue; // 已过或在后面（通常不会）
+      const t = velocity > 0 ? dist / velocity : Infinity;
+      if(t > 0 && t <= AUTO_REACTION_TIME){
+        dangerList.push({ob, time: t, dist});
+      }
+    }
+    dangerList.sort((a,b)=>a.time - b.time);
+
+    if(dangerList.length === 0) return;
+
+    // 决策优先级：找到下一次会撞到当前目标 lane 的障碍并处理（先考虑左右换道）
+    // 如果当前目标 lane 在即将到达的障碍中，则尝试换到一个安全 lane；若无法换，则做跳/趴
+    // 1) 检查是否在当前 targetLane 会被障碍击中（在 reaction window 内）
+    let willHitCurrent = false;
+    for(const d of dangerList){
+      const laneIdx = d.ob.userData.laneIndex;
+      if(laneIdx === targetLane){
+        // 若该障碍会与玩家在同一时间同一位置重合，则认为会击中
+        // 进一步根据障碍高度类型判断是否通过（例如 mustJump 必须跳）
+        // 简化：如果在短时内，直接认为需要规避
+        willHitCurrent = true;
+        break;
+      }
+    }
+
+    // 尝试换道：找一个 lane 没有短时间冲突的
+    if(willHitCurrent){
+      const candidateLanes = [0,1,2];
+      // 优先靠中间或离当前最近的 lane
+      candidateLanes.sort((a,b)=>Math.abs(a-targetLane)-Math.abs(b-targetLane));
+      let found = null;
+      for(const ln of candidateLanes){
+        if(ln === targetLane) continue;
+        // 检查在 reaction window 内该 lane 是否安全
+        let safe = true;
+        for(const d of dangerList){
+          const laneIdx = d.ob.userData.laneIndex;
+          if(laneIdx === ln){
+            // 如果同一 lane 有障碍并且到达时间小于 safety threshold，则不安全
+            if(d.time <= Math.max(0.45, AUTO_REACTION_TIME)) { safe = false; break; }
+          }
+        }
+        if(safe){ found = ln; break; }
+      }
+      if(found !== null){
+        // 选择变道（直接设置目标轨道，物理过渡会自动做平滑）
+        targetLane = found;
+        return;
+      }
+      // 如果找不到换道（周围三道都有障碍），则对最近的威胁做动作（跳或趴）
+      const nearest = dangerList[0].ob;
+      const typ = nearest.userData.type;
+      if(typ === 'mustJump'){
+        // 如果还能跳，则跳
+        if(Math.abs(player.position.y - 0.5) < 0.02 && !isSliding) jump();
+      } else if(typ === 'mustSlide'){
+        if(Math.abs(player.position.y - 0.5) < 0.02 && !isSliding) slide();
+      } else if(typ === 'either'){
+        // 优先跳
+        if(Math.abs(player.position.y - 0.5) < 0.02 && !isSliding) jump();
+      }
+    } else {
+      // 当前 lane 安全，但可能前面一两条 lane 有障碍，尝试向中间靠（策略性）
+      // 如果玩家在边道，且中间道更安全，切中间降低风险
+      if(targetLane !== 1){
+        // 判断中间是否安全
+        let midSafe = true;
+        for(const d of dangerList){
+          if(d.ob.userData.laneIndex === 1 && d.time <= AUTO_REACTION_TIME) { midSafe = false; break; }
+        }
+        if(midSafe) targetLane = 1;
+      }
+    }
+  }
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+
+    if(isRunning){
+      // 随基础分提高速度 —— **去掉最高上限（可以无限增大）**
+      speed = 0.2 + baseScore*0.0025; // 这里不再 min(...)
+
+      spawnTimer += dt;
+      if(spawnTimer > 0.9 - Math.min(0.6, baseScore*0.004)){
+        spawnObstacle();
+        spawnTimer = 0;
+      }
+
+      // 金币生成频率（相对稀疏）
+      spawnCoinTimer += dt;
+      if(spawnCoinTimer > 1.8 - Math.min(1.0, baseScore*0.0025)){
+        if(Math.random() < 0.6) spawnCoin();
+        spawnCoinTimer = 0;
+      }
+
+      // 先让自动躲避逻辑基于当前障碍与速度判断动作
+      autoAvoidLogic(dt);
+
+      // 更新障碍位置（向玩家移动，z 增大），并加入帧间过渡检测以降低高速漏判
+      const velocity = speed * 120 * 0.35; // units per second (approx)
+      for(let i=obstacles.length-1;i>=0;i--){
+        const ob = obstacles[i];
+        const prevZ = ob.position.z;
+        const newZ = prevZ + velocity * dt;
+
+        // 如果障碍在这帧“跨越”了玩家位置，则做一次瞬时检测（sweep）
+        const playerZ = player.position.z;
+        if(prevZ < playerZ && newZ >= playerZ){
+          // 暂时置于玩家位置检测碰撞
+          ob.position.z = playerZ;
+          if(checkCollisionLogic(player, ob)){
+            gameOver();
+            // 恢复位置（gameOver 会停止 isRunning，后面会退出循环）
+            ob.position.z = newZ;
+            break;
+          }
+        }
+
+        // 更新真实位置
+        ob.position.z = newZ;
+
+        // 简单销毁并得分（基础分）
+        if(ob.position.z > 10){
+          scene.remove(ob); obstacles.splice(i,1);
+          baseScore += 10; // 每个越过障碍得基础分
+          updateScore();
+          continue;
+        }
+
+        // 常规碰撞检查（如果没有被 sweep 捕捉到）
+        if(checkCollisionLogic(player, ob)){
+          gameOver();
+          break;
+        }
+      }
+
+      // 更新金币位置 & 旋转
+      for(let i=coins.length-1;i>=0;i--){
+        const c = coins[i];
+        c.position.z += speed * 120 * dt * 0.35;
+        c.rotation.y += dt * 6;
+        if(c.position.z > 10){
+          scene.remove(c); coins.splice(i,1);
+          continue;
+        }
+      }
+
+      // 尝试收集金币（放在位置更新后）
+      tryCollectCoin(player);
+
+      // 玩家横向过渡（平滑移动）
+      const targetX = LANES[targetLane];
+      player.position.x += (targetX - player.position.x) * 0.2;
+
+      // 跳跃物理
+      if(player.position.y > 0.5 || velocityY>0){
+        velocityY += gravity;
+        player.position.y += velocityY;
+        if(player.position.y <= 0.5){
+          player.position.y = 0.5;
+          velocityY = 0;
+        }
+      }
+
+      // 倒地滑铲处理
+      if(isSliding){
+        slideTimer -= dt;
+        if(slideTimer <= 0){
+          isSliding = false;
+          player.scale.y = 1;
+          player.position.y = 0.5;
+        }
+      }
+
+      // 相机平滑跟随
+      camera.position.x += (player.position.x - camera.position.x) * 0.06;
+
+      // 慢慢增加基础分（时间部分）
+      baseScore += dt * 12;
+      updateScore();
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  function updateScore(){
+    const baseInt = Math.floor(baseScore);
+    const coinBonus = coinCount * COIN_VALUE;
+    const total = baseInt + coinBonus;
+    scoreTextEl.textContent = '得分: ' + total;
+    coinCountEl.textContent = coinCount;
+    hiEl.textContent = '最高分: ' + storedHigh;
+  }
+
+  function startGame(){
+    // 清理场景
+    for(const o of obstacles) scene.remove(o);
+    for(const c of coins) scene.remove(c);
+    obstacles = []; coins = [];
+    baseScore = 0; coinCount = 0; speed = 0.2; spawnTimer = 0; spawnCoinTimer = 0;
+    isRunning = true; startBtn.style.display = 'none'; restartBtn.style.display='none';
+    targetLane = 1; player.position.set(LANES[targetLane], 0.5, 1.2); player.scale.set(1,1,1); isSliding=false;
+    coinCountEl.textContent = '0';
+    scoreBreakEl.style.display = 'none';
+    gameOverPanel.style.display = 'none';
+    overlay.style.pointerEvents = 'none';
+  }
+
+  function gameOver(){
+    if(!isRunning) return;
+    isRunning = false;
+    // 结算
+    const baseInt = Math.floor(baseScore);
+    const coinBonus = coinCount * COIN_VALUE;
+    const total = baseInt + coinBonus;
+    finalScoreEl.textContent = '得分: ' + total;
+    // 显示分数分解
+    baseLineEl.textContent = '基础分: ' + baseInt;
+    coinsLineEl.textContent = '金币数: ' + coinCount;
+    coinBonusLineEl.textContent = '金币加成: ' + coinBonus;
+    totalLineEl.textContent = '总分: ' + total;
+    scoreBreakEl.style.display = 'block';
+
+    // 检查最高分
+    if(total > storedHigh){
+      storedHigh = total;
+      localStorage.setItem(HIGHSCORE_KEY, storedHigh);
+      highscoreEl.style.display = 'block';
+      highscoreEl.textContent = '最高分: ' + storedHigh + '（新纪录！）';
+      hiEl.textContent = '最高分: ' + storedHigh;
+    } else {
+      highscoreEl.style.display = 'none';
+    }
+    overlay.style.pointerEvents = 'auto';
+    gameOverPanel.style.display = 'block';
+    restartBtn.style.display = 'inline-block';
+  }
+
+  // 按钮绑定
+  startBtn.addEventListener('click', ()=>{ startGame(); });
+  restartBtn.addEventListener('click', ()=>{ startGame(); restartBtn.style.display='none'; });
+  goRestart.addEventListener('click', ()=>{ startGame(); });
+  goOther.addEventListener('click', ()=>{ window.location.href = 'index1.html'; });
+  backBtn.addEventListener('click', ()=>{ window.location.href = 'index1.html'; });
+
+  // 预加载贴图
+  function preload(){
+    const l = new THREE.TextureLoader();
+    l.load(PLAYER_IMAGE, ()=>{});
+    for(const p of OBSTACLE_DEFS) l.load(p.img, ()=>{});
+    l.load(BACKGROUND_IMAGE, ()=>{});
+    l.load(COIN_IMAGE, ()=>{});
+  }
+
+  // 启动
+  init(); preload();
+
+  </script>
+
+
+</script>
+
+<!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/地铁跑酷.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>

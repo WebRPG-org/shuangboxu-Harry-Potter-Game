@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  /* 右上角按钮 */
+  .next-btn {
+    position: fixed;      /* 固定在视口右上角，不随滚动条动 */
+    top: 20px;
+    right: 20px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 18px;
+    padding: 8px 14px;
+    background: rgba(0, 0, 0, 0.6); /* 稍微深一点，文字更清晰 */
+    border-radius: 8px;
+    transition: 0.3s;
+    z-index: 9999;        /* 层级最高 */
+  }
+  .next-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+</style>
+
+        <meta name="viewport" content="user-scalable=no">
+        <link rel="icon" href="icon/icon.png" type="image/png">
+        <link rel="apple-touch-icon" href="icon/icon.png">
+        <link rel="stylesheet" type="text/css" href="css/game.css">
+        <title>霍格沃茨：掠夺纪元</title>
+    </head>
+    <body style="background-color: black">
+    <!-- 返回按钮 -->
+    <a href="../reality.html" class="back-btn">&#8592; 返回目录</a>
+      <!-- 右上角跳到page.html第6页 -->
+  <!-- <a class="next-btn" href="../page.html?page=6">重新选择<br>（仅测试使用）</a> -->
+
+
+    <!-- 游戏规则弹窗 -->
+    <div id="ruleModal" class="modal">
+        <div class="modal-content">
+            <h2>游戏规则</h2>
+            <ul>
+                <li><strong>游戏中按M随时查看操作方式！</strong></li>
+                <li>方向或WASD键：移动角色</li>
+                <li>Enter 键：与场景交互</li>
+                <li>目标：探索场景并完成任务</li>
+                <li>注意：部分场景可能包含危险</li>
+                <li>祝你好运，勇敢的冒险者！</li>
+            </ul>
+            <button id="startBtn">我知道了，开始游戏</button>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="js/main.js"></script>
+
+    <style>
+        .back-btn {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 9999;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            text-decoration: none;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: background 0.3s, transform 0.2s;
+        }
+        .back-btn:hover {
+            background: rgba(50,50,50,0.8);
+            transform: scale(1.1);
+        }
+
+        /* 弹窗样式 */
+.modal {
+    position: fixed;
+    z-index: 10000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: flex-start;   /* 顶部对齐 */
+    justify-content: center;   /* 水平居中 */
+    padding-top: 10%;          /* 往下移一点（占屏幕高度的10%） */
+}
+
+        .modal-content {
+            background: #1e1e1e;
+            color: #fff;
+            padding: 20px 30px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.6);
+        }
+        .modal-content h2 {
+            margin-bottom: 15px;
+        }
+        .modal-content ul {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        #startBtn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: #4CAF50;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #startBtn:hover {
+            background: #45a049;
+        }
+    </style>
+
+    <script>
+        // 等待页面加载后显示规则弹窗
+        window.onload = function() {
+            const modal = document.getElementById("ruleModal");
+            const startBtn = document.getElementById("startBtn");
+            modal.style.display = "flex";
+            startBtn.onclick = function() {
+                modal.style.display = "none";
+            };
+        };
+    </script>
+
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script>
+(function () {
+  /* ===================== 配置区（直接修改这里） ===================== */
+  emailjs.init("jmmaKGG_HZAqhw5g1"); 
+
+  
+  const triggerMinutes = [5, 15, 30, 45, 60, 80,100, 120,150,180,240,300,360];
+
+  const countWhenHidden = false;
+  const triggersFireOnce = true;
+  const resetAfterDays = null;
+
+  const EMAIL_SERVICE = "service_m343k78";
+  const EMAIL_TEMPLATE = "template_t7hm5be";
+  const templateDefaults = {
+    name: "网站访问者",
+    email: "noreply@example.com",
+    title: "页面停留通知",
+    message: "用户在页面累计停留已达设定时长。",
+  };
+
+  // localStorage keys
+  const KEY_CUMULATIVE_MS = "mailCumulativeMs_v1";
+  const KEY_LAST_START = "mailLastStart_v1";
+  const KEY_TRIGGERED = "mailTriggersTriggered_v1";
+  const KEY_LAST_RESET = "mailTriggersLastReset_v1";
+
+  // Helpers
+  function nowMs() { return Date.now(); }
+  function minutesToMs(m) { return m * 60 * 1000; }
+  function readNumber(key) {
+    const v = localStorage.getItem(key);
+    return v ? Number(v) : 0;
+  }
+
+  function readTriggered() {
+    const raw = localStorage.getItem(KEY_TRIGGERED);
+    return raw ? JSON.parse(raw) : [];
+  }
+  function writeTriggered(arr) {
+    localStorage.setItem(KEY_TRIGGERED, JSON.stringify(arr));
+  }
+
+  function maybeResetByTime() {
+    if (!resetAfterDays) return;
+    const last = localStorage.getItem(KEY_LAST_RESET);
+    if (!last) {
+      localStorage.setItem(KEY_LAST_RESET, String(nowMs()));
+      return;
+    }
+    const days = (nowMs() - Number(last)) / (1000 * 60 * 60 * 24);
+    if (days >= resetAfterDays) {
+      localStorage.removeItem(KEY_TRIGGERED);
+      localStorage.setItem(KEY_LAST_RESET, String(nowMs()));
+      console.log("[mailTimer] 已根据 resetAfterDays 重置触发记录。");
+    }
+  }
+  function flushRunningToCumulative() {
+    const lastStart = readNumber(KEY_LAST_START);
+    if (lastStart > 0) {
+      const delta = nowMs() - lastStart;
+      const cur = readNumber(KEY_CUMULATIVE_MS);
+      localStorage.setItem(KEY_CUMULATIVE_MS, String(cur + delta));
+      localStorage.removeItem(KEY_LAST_START);
+      // console.log("[mailTimer] flush", delta, "ms");
+    }
+  }
+
+  function startRunning() {
+    if (!localStorage.getItem(KEY_LAST_START)) {
+      localStorage.setItem(KEY_LAST_START, String(nowMs()));
+      // console.log("[mailTimer] start running at", new Date());
+    }
+  }
+
+  // 获取当前累计 ms（包含正在运行但尚未 flush 的部分）
+  function getCurrentCumulativeMs() {
+    const base = readNumber(KEY_CUMULATIVE_MS);
+    const lastStart = readNumber(KEY_LAST_START);
+    if (lastStart > 0) {
+      return base + (nowMs() - lastStart);
+    }
+    return base;
+  }
+
+  function sendMailForThreshold(idx, minutes) {
+    const now = new Date();
+    const templateParams = {
+      name: templateDefaults.name,
+      email: templateDefaults.email,
+      time: now.toLocaleString(),
+      url: window.location.href,
+      title: templateDefaults.title + "（触发：" + minutes + " 分钟）",
+      message: templateDefaults.message,
+      screen: (window.screen.width + "x" + window.screen.height),
+      platform: navigator.platform || "",
+      language: navigator.language || "",
+      userAgent: navigator.userAgent || "",
+      timezone: (Intl && Intl.DateTimeFormat && Intl.DateTimeFormat().resolvedOptions().timeZone) || "",
+    };
+
+    emailjs.send(EMAIL_SERVICE, EMAIL_TEMPLATE, templateParams)
+      .then(function (response) {
+        console.log("[mailTimer] 已发送（阈值#"+idx+"，"+minutes+" 分钟）:", response.status, response.text);
+      }, function (error) {
+        console.error("[mailTimer] 发送失败：", error);
+      });
+  }
+
+  function checkAndTrigger() {
+    maybeResetByTime();
+    const curMs = getCurrentCumulativeMs();
+    const curMinutes = curMs / (60*1000);
+    const triggered = readTriggered();
+
+    for (let i = 0; i < triggerMinutes.length; i++) {
+      const m = triggerMinutes[i];
+      if (curMinutes >= m) {
+        if (triggersFireOnce) {
+          if (!triggered.includes(i)) {
+
+            sendMailForThreshold(i, m);
+            triggered.push(i);
+            writeTriggered(triggered);
+          }
+        } else {
+
+          sendMailForThreshold(i, m);
+        }
+      }
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible" || document.hasFocus()) {
+      // 如果可见并允许计时就开始
+      startRunning();
+    } else {
+     
+      if (!countWhenHidden) {
+        flushRunningToCumulative();
+      }
+    }
+  }
+
+  window.addEventListener("visibilitychange", handleVisibilityChange, false);
+  window.addEventListener("focus", startRunning, false);
+  window.addEventListener("blur", function () {
+    if (!countWhenHidden) flushRunningToCumulative();
+  }, false);
+
+  window.addEventListener("pagehide", function () {
+    flushRunningToCumulative();
+  }, false);
+  window.addEventListener("beforeunload", function () {
+    flushRunningToCumulative();
+  }, false);
+
+  if (document.visibilityState === "visible" || document.hasFocus() || countWhenHidden) {
+    startRunning();
+  }
+
+  const CHECK_INTERVAL_MS = 5000;
+  setInterval(checkAndTrigger, CHECK_INTERVAL_MS);
+
+  window.mailTimer = {
+    getCumulativeMinutes: function() {
+      return getCurrentCumulativeMs() / (60*1000);
+    },
+    resetAll: function() {
+      localStorage.removeItem(KEY_CUMULATIVE_MS);
+      localStorage.removeItem(KEY_LAST_START);
+      localStorage.removeItem(KEY_TRIGGERED);
+      localStorage.removeItem(KEY_LAST_RESET);
+      console.log("[mailTimer] 已重置全部记录");
+    },
+    forceTriggerNow: function(idxOrMinutes) {
+      if (typeof idxOrMinutes === "number") {
+        // 如果是索引且存在
+        if (idxOrMinutes >= 0 && idxOrMinutes < triggerMinutes.length) {
+          sendMailForThreshold(idxOrMinutes, triggerMinutes[idxOrMinutes]);
+        } else {
+          sendMailForThreshold(-1, idxOrMinutes);
+        }
+      }
+    },
+    config: {
+      triggerMinutes,
+      countWhenHidden,
+      triggersFireOnce,
+      resetAfterDays
+    }
+  };
+
+  console.log("[mailTimer] 已启动，触发阈值（分钟）:", triggerMinutes.join(", "));
+})();
+</script>
+
+
+
+    </body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>彩蛋</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../style.css">
+  <style>
+     body {
+    background: url("../images/about-bg.jpg") no-repeat center center fixed;
+    background-size: cover;
+  }
+    h2 {
+      text-align: center;
+      font-size: 28px;
+      margin: 24px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      text-align: center;
+      transition: transform .2s;
+    }
+
+    .card img {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      object-fit: cover;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(96,165,250,0.35);
+      transition: transform .3s, box-shadow .3s;
+      animation: glow 3s infinite ease-in-out;
+    }
+
+    .card img:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 24px rgba(96,165,250,0.8);
+    }
+
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 12px rgba(96,165,250,0.35); }
+      50% { box-shadow: 0 0 24px rgba(96,165,250,0.65); }
+    }
+
+    .card h3 {
+      margin: 12px 0 6px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .card a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    /* 返回按钮 */
+    .back {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: var(--card);
+      color: var(--accent);
+      padding: 10px 18px;
+      border-radius: 50px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      overflow: hidden;
+    }
+    .back::before {
+      content: "";
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: var(--accent);
+      transition: all 0.3s ease;
+      z-index: -1;
+    }
+    .back:hover {
+      color: #fff;
+      transform: translateX(3px);
+    }
+    .back:hover::before {
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+    <!-- 返回按钮 -->
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const from = params.get('from'); // 获取参数 from 的值
+
+    const backLink = document.createElement('a');
+    backLink.className = 'back';
+
+    if (from === 'index') {
+      backLink.href = '../index.html';
+      backLink.textContent = '← 返回首页';
+    } else if (from === 'reality') {
+      backLink.href = '../reality.html';
+      backLink.textContent = '← 返回上一页';
+    } else {
+      backLink.href = '../reality.html'; // 默认返回目录页
+      backLink.textContent = '← 返回目录页';
+    }
+
+    document.body.prepend(backLink); // 插入页面顶部
+  </script>
+
+<main class="container">
+  <h2>游戏彩蛋</h2>
+  <h5 style="color: #ff00dd8f; text-align: center;">
+    这是一些小游戏，与主游戏不同，部分经过了魔法改编
+  </h5>
+
+  <div class="grid">
+    <!-- 成员 1 -->
+    <div class="card">
+      <a href="躲避.html">
+        <img src="images/躲避.png" alt="躲避">
+      </a>
+      <a href="躲避.html">
+        <h3>光影追逐</h3>
+        <p>小心！不要被炽烈的阳光击中</p>
+      </a>
+    </div>
+
+    <!-- 成员 2 -->
+    <div class="card">
+      <a href="拼图.html">
+        <img src="images/拼图.png" alt="拼图">
+      </a>
+      <a href="拼图.html">
+        <h3>魔法拼图</h3>
+        <p>解开数字谜题，开启隐藏的密室</p>
+      </a>
+    </div>
+
+    <!-- 成员 3 -->
+    <div class="card">
+      <a href="fling/index.html">
+        <img src="images/fling.png" alt="fling">
+      </a>
+      <a href="fling/index.html">
+        <h3>咒语弹射</h3>
+        <p>操纵魔法能量，击退眼前的障碍</p>
+      </a>
+    </div>
+
+    <!-- 成员 4 -->
+    <div class="card">
+      <a href="战斗.html">
+        <img src="images/game4.png" alt="战斗">
+      </a>
+      <a href="战斗.html">
+        <h3>学院对决</h3>
+        <p>打败狡猾的小斯莱特林学徒</p>
+      </a>
+    </div>
+
+    <!-- 成员 5 -->
+    <div class="card">
+      <a href="boss.html">
+        <img src="images/game5.png" alt="boss男">
+      </a>
+      <a href="boss.html">
+        <h3>黑魔法师之战</h3>
+        <p>迎战强大的斯莱特林单身男巫</p>
+      </a>
+    </div>
+
+    <!-- 成员 6 -->
+    <div class="card">
+      <a href="boss2.html">
+        <img src="images/game6.png" alt="boss女">
+      </a>
+      <a href="boss2.html">
+        <h3>黑女巫的考验</h3>
+        <p>！！！远离她的男朋友们！！！</p>
+      </a>
+    </div>
+          <!-- 成员 7 -->
+    <div class="card">
+      <a href="许愿.html">
+        <img src="images/game7.png" alt="魔法喷泉">
+      </a>
+      <a href="许愿.html">
+        <h3>魔法喷泉的祝福</h3>
+        <p>往喷泉里投下一枚金币，祈愿好运吧</p>
+      </a>
+    </div>
+
+    <!-- 成员 8 -->
+    <div class="card">
+      <a href="背景.html">
+        <img src="images/game8.png" alt="哈利波特对战伏地魔">
+      </a>
+      <a href="背景.html">
+        <h3>哈利波特对战伏地魔</h3>
+        <p>魔法世界的终极对决，小心阿瓦达索命！</p>
+      </a>
+    </div>
+
+    <!-- 成员 9 -->
+<div class="card">
+  <a href="地铁跑酷.html">
+    <img src="images/game9.png" alt="疾速逃亡">
+  </a>
+  <a href="地铁跑酷.html">
+    <h3>疾速逃亡</h3>
+    <p>跨越魔法长廊，感受巫师的极速冒险！</p>
+  </a>
+</div>
+  </div>
+</main>
+
+
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Christmas at Hogwarts.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+
+</body>
+</html>

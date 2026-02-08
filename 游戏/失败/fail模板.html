@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏失败1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/about-bg.jpg") no-repeat center center/cover;
+      font-family: "Microsoft YaHei", sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 右上角按钮 */
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 居中文字 */
+    .text-box {
+      margin: auto;
+      text-align: center;
+      max-width: 80%;
+      line-height: 1.8;
+    }
+    .line {
+      margin: 15px 0;
+      opacity: 0; /* 初始不可见，靠动画出现 */
+    }
+
+    .line1 {
+      font-size: 28px;
+      color: #ff6b6b;
+      opacity: 0;
+      animation: flashIn 2s forwards;
+    }
+    @keyframes flashIn {
+      0%, 20%, 40%, 60%, 80% { opacity: 0; }
+      10%, 30%, 50%, 70%, 90%, 100% { opacity: 1; }
+    }
+
+    .line2 {
+      font-size: 24px;
+      color: #feca57;
+      animation: fadeIn 3s forwards;
+      animation-delay: 3.5s;
+    }
+    .line3 {
+      font-size: 22px;
+      color: #1dd1a1;
+      animation: scaleIn 2s forwards;
+      animation-delay: 6.5s;
+    }
+    .line4 {
+      font-size: 20px;
+      color: #c8d6e5;
+      font-style: italic;
+      animation: blink 1s infinite;
+      animation-delay: 9s;
+    }
+
+    /* 渐隐渐现 */
+    @keyframes fadeIn {
+      from { opacity: 0 }
+      to { opacity: 1 }
+    }
+    /* 放大进入 */
+    @keyframes scaleIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    /* 闪烁 */
+    @keyframes blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+
+
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(1, '../reality.html')">返回菜单</a>
+
+  <!-- 右上角跳到page.html第6页 -->
+  <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(1, '../page.html?page=6')">重新选择（仅测试使用）</a>
+
+  <!-- 文字内容 -->
+  <div class="text-box">
+    <div class="line line1">你错过了与莉莉·伊万斯相识的机会，</div>
+    <div class="line line2">最终与她形同陌路，</div>
+    <div class="line line3">你也错过了你人生中最大的转折点，</div>
+    <div class="line line4">你最终度过了一个平凡的人生，但……</div>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+
+<script src="../achievements.js"></script>
+<script src="../results.js"></script>
+
+</body>
+</html>

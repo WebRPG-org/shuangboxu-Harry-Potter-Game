@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>哈利波特主题战斗游戏（更新：格子玩家 + 胜利检测 + 子弹行为）</title>
+  <style>
+    html,body{height:100%;margin:0;background:#12121a;display:flex;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#fff}
+#gameWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 150px; /* 添加这一行 */
+}
+
+    canvas{background:#062b12;image-rendering:pixelated;border:6px solid rgba(255,255,255,0.04);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+    .hud{margin-top:8px;display:flex;gap:12px;align-items:center}
+    .bar{background:#222;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:6px}
+    .hpTrack{width:200px;height:12px;background:#333;border-radius:8px;overflow:hidden}
+    .hpInner{height:100%;background:linear-gradient(90deg,#0f0,#0a8);width:100%;}
+    /* .msg{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:10px 18px;border-radius:8px} */
+    /* 覆盖 .msg，保证在 canvas 之上且居中更醒目 */
+.msg {
+  position: absolute;
+  top: 40%;               /* 垂直居中靠上一点 */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;            /* 白色文字，和背景区分 */
+  padding: 20px 30px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+  z-index: 9999;          /* 保证在最上层 */
+  display: none;
+}
+.game-title {
+  text-align: center;
+  font-size: 28px;
+  color: #f5f5f5;
+  margin: 16px 0;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+
+.controls{font-size:13px;color:#ddd; margin-top:6px}
+    .btns{margin-top:8px;display:flex;gap:8px}
+    .btn{background:#2b6;padding:6px 10px;border-radius:6px;color:#071;font-weight:700;cursor:pointer}
+    .btn.secondary{background:#444;color:#ddd}
+    .skill{font-size:12px;color:#ddd}
+    .cool{opacity:0.5;font-size:12px}
+  </style>
+</head>
+<body>
+  
+  
+<div id="gameWrap">
+  <h1 class="game-title">哈利波特主题战斗游戏</h1>
+  <div style="position:relative">
+    <canvas id="c" width="600" height="600"></canvas>
+    <div id="message" class="msg" style="display:none"></div>
+  </div>
+
+  <div class="hud">
+    <div class="bar">
+      <div>玩家生命：</div>
+      <div class="hpTrack"><div id="playerHP" class="hpInner" style="width:100%"></div></div>
+      <div style="font-size:12px;margin-top:2px" id="hpText">100 / 100</div>
+    </div>
+
+    <div class="bar">
+      <div>剩余敌人：<span id="enemyCount">0</span></div>
+      <div style="font-size:12px">按键：方向键 / WASD 移动，IJKL 发射不同方向子弹，N 护盾，M 昏迷</div>
+    </div>
+
+<div class="bar" style="display:none;">
+  <div class="skill">技能冷却</div>
+  <div class="cool">护盾（N）: <span id="cdShield">0</span>s  | 昏迷（M）: <span id="cdStun">0</span>s</div>
+</div>M
+
+  </div>
+
+  <!-- <div class="controls">玩家现在**对齐格子中心**。按住键会以短间隔继续移动（类似按键重复）</div> -->
+
+  <div class="btns">
+    <div class="btn" id="restartBtn">重新开始</div>
+    <div class="btn secondary" id="continueBtn">打不过</div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   配置区（可自定义）
+   ========================= */
+const cellCount = 15;
+const cellSize = 600/15; // 20*32 = 640
+
+// 敌人位置：可在项上加 bulletKind: 'tracking-homing' | 'tracking-initial' | 'linear'
+const chaserPositions = [ {x:2,y:2, bulletKind:'tracking-homing'}, {x:10,y:3, bulletKind:'tracking-initial'} ];
+const wandererPositions = [ {x:5,y:10, bulletKind:'linear'}, {x:15,y:5} ];
+const chaserCount = 0;
+const wandererCount = 0;
+
+// 全局配置：技能冷却基准等
+const CONFIG = {
+  skillBaseCooldownMs: 500, // 0.5 秒（你要求可以在开头自定义）
+  playerMaxHp: 100,
+  playerDamage: 25,
+  playerMoveMsPerCell: 140, // 玩家移动一格的平滑时间（ms）
+  shield: { reduceFactor: 0.5, duration: 3000, cooldownMs: null },
+  stun: { duration: 2000, radius: 2.2, cooldownMs: null },
+
+  enemy: {
+    chaserHp: 40,
+    wandererHp: 30,
+    chaserMeleeDmg: 10,
+    wandererMeleeDmg: 8,
+    bulletDamage: 15,
+    chaserMoveInterval: 500, // ms
+    wandererMoveInterval: 800,
+    // 默认子弹行为（如果位置项未指定）
+    defaultBulletKind: { chaser: 'tracking-homing', wanderer: 'linear' }
+  },
+
+  bullet: {
+    speed: 0.38,
+    enemySpeed: 0.22,
+    lifeFrames: 80,
+    homingSteer: 0.12
+  }
+};
+if(!CONFIG.shield.cooldownMs) CONFIG.shield.cooldownMs = CONFIG.skillBaseCooldownMs;
+if(!CONFIG.stun.cooldownMs) CONFIG.stun.cooldownMs = CONFIG.skillBaseCooldownMs;
+
+/* =========================
+   状态与资源
+   ========================= */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const playerHPBar = document.getElementById('playerHP');
+const enemyCountEl = document.getElementById('enemyCount');
+const hpText = document.getElementById('hpText');
+const cdShieldEl = document.getElementById('cdShield');
+const cdStunEl = document.getElementById('cdStun');
+const restartBtn = document.getElementById('restartBtn');
+const continueBtn = document.getElementById('continueBtn');
+
+// 可移除、可复用的命名 handler（方便 removeEventListener）
+function successHandler() {
+  if (window.opener) {
+    window.opener.postMessage({
+      type: "MiniGameResult",
+      success: true,
+      action: "continue"
+    }, "*");
+  }
+  window.close();
+}
+function failHandler() {
+  if (window.opener) {
+    window.opener.postMessage({
+      type: "MiniGameResult",
+      success: false,
+      action: "giveup"
+    }, "*");
+  }
+  window.close();
+}
+
+let images = {};
+let loadedImgs = 0, totalImgs = 2;
+function loadImg(key, src){
+  const img = new Image();
+  img.src = src;
+  img.onload = ()=>{ images[key]=img; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+  img.onerror = ()=>{ images[key]=null; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+}
+loadImg('player','../images/01.png');
+loadImg('enemy','../images/02.png');
+
+const state = {
+  // 玩家现在使用格子坐标（整数） + 平滑 anim 以便渲染
+  player: { x: cellCount-1, y: cellCount-1, animX: cellCount-1, animY: cellCount-1, hp: CONFIG.playerMaxHp, maxHp: CONFIG.playerMaxHp, dir: {x:-1,y:0}, moving:false, moveTarget:null, moveEndAt:0, shieldUntil:0, shieldCdUntil:0, stunCdUntil:0 },
+  enemies: [],
+  bullets: [],
+  particles: [],
+  keys: {},
+  running: true,
+  win:false, lose:false,
+  time: performance.now()
+};
+
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function gridToPx(gx, gy){ return { x: gx*cellSize + cellSize/2, y: gy*cellSize + cellSize/2 }; }
+function now(){ return performance.now(); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+/* 创建敌人：会将 bulletKind 填到 en.bulletKind，值为：
+   'tracking-homing' | 'tracking-initial' | 'linear' */
+function createEnemy(type, gx, gy, bulletKind=null){
+  const baseHp = (type==='chaser') ? CONFIG.enemy.chaserHp : CONFIG.enemy.wandererHp;
+  const kind = bulletKind || (CONFIG.enemy.defaultBulletKind[type]) || 'tracking-homing';
+  return {
+    id: uid(),
+    type,
+    x: gx, y: gy,
+    animX: gx, animY: gy,
+    hp: baseHp, maxHp: baseHp,
+    lastMoveAt: 0,
+    fireCd: 0,
+    stunnedUntil: 0,
+    lastDir: {x:1,y:0},
+    bulletKind: kind
+  };
+}
+
+function populateEnemies(){
+  state.enemies.length = 0;
+  if(chaserPositions.length>0){
+    chaserPositions.forEach(p=> state.enemies.push(createEnemy('chaser', p.x, p.y, p.bulletKind)));
+  } else if(chaserCount>0){
+    for(let i=0;i<chaserCount;i++) state.enemies.push(createEnemy('chaser', randInt(0,cellCount-1), randInt(0,cellCount-1)));
+  }
+  if(wandererPositions.length>0){
+    wandererPositions.forEach(p=> state.enemies.push(createEnemy('wanderer', p.x, p.y, p.bulletKind)));
+  } else if(wandererCount>0){
+    for(let i=0;i<wandererCount;i++) state.enemies.push(createEnemy('wanderer', randInt(0,cellCount-1), randInt(0,cellCount-1)));
+  }
+  enemyCountEl.textContent = state.enemies.length;
+  // 立即检查胜利（若敌人一开始就是0）
+  checkVictory();
+}
+
+/* 检查胜利（统一调用点） */
+function checkVictory(){
+  if(state.enemies.length === 0 && !state.win){
+    win();
+  }
+}
+
+/* 启动 */
+// 启动（替换原来的 start()）
+function start() {
+  populateEnemies();
+  attachEvents();
+
+  // 重新开始按钮（用 onclick 也可以，但先清除再绑，避免重复）
+  restartBtn.onclick = () => location.reload();
+
+  // 确保先移除旧监听，再绑定默认的“放弃/打不过”处理
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.textContent = "打不过";
+  continueBtn.classList.add('secondary');
+  continueBtn.style.display = "inline-block";
+  continueBtn.addEventListener('click', failHandler);
+
+  requestAnimationFrame(loop);
+}
+/* 输入：改为 keydown 触发移动一步（并允许按住重复） */
+let lastKeyMoveAt = 0;
+const keyRepeatMs = 120; // 按住时的重复速率（ms）
+function attachEvents(){
+  window.addEventListener('keydown', e=>{
+    const k = e.key.toLowerCase();
+    state.keys[k] = true;
+
+    // 玩家移动（方向键 / WASD）
+    if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
+      tryMoveByKey(k);
+    }
+
+    // === 发射方向控制 ===
+    if(k === 'i'){ // 向上发射
+      e.preventDefault();
+      playerShoot({x:0, y:-1});
+    }
+    if(k === 'k'){ // 向下发射
+      e.preventDefault();
+      playerShoot({x:0, y:1});
+    }
+    if(k === 'j'){ // 向左发射
+      e.preventDefault();
+      playerShoot({x:-1, y:0});
+    }
+    if(k === 'l'){ // 向右发射
+      e.preventDefault();
+      playerShoot({x:1, y:0});
+    }
+
+    // 技能
+    if(k === 'n'){ e.preventDefault(); useShield(); }
+    if(k === 'm'){ e.preventDefault(); useStun(); }
+  });
+
+  window.addEventListener('keyup', e=>{
+    state.keys[e.key.toLowerCase()] = false;
+  });
+}
+
+/* 处理按键一步移动（若玩家当前没有在移动） */
+function tryMoveByKey(k){
+  const nowt = now();
+  if(state.player.moving && nowt < state.player.moveEndAt) return;
+  // 防止太快速重复触发
+  if(nowt - lastKeyMoveAt < 40) return;
+  lastKeyMoveAt = nowt;
+
+  let dx=0, dy=0;
+  if(k==='arrowup' || k==='w') dy = -1;
+  if(k==='arrowdown' || k==='s') dy = 1;
+  if(k==='arrowleft' || k==='a') dx = -1;
+  if(k==='arrowright' || k==='d') dx = 1;
+  if(dx===0 && dy===0) return;
+
+  const tx = Math.max(0, Math.min(cellCount-1, state.player.x + dx));
+  const ty = Math.max(0, Math.min(cellCount-1, state.player.y + dy));
+  // 若目标与当前相同，不动
+  if(tx === state.player.x && ty === state.player.y) return;
+
+  // 发起格子移动：设置 moveTarget 和 moveEndAt
+  state.player.moveTarget = { x: tx, y: ty };
+  state.player.moving = true;
+  state.player.moveStartAt = now();
+  state.player.moveEndAt = state.player.moveStartAt + CONFIG.playerMoveMsPerCell;
+  state.player.dir = {x: Math.sign(dx), y: Math.sign(dy)};
+}
+
+/* 玩家发射（与之前相同） */
+function playerShoot(dir){
+  if(!state.running) return;
+  let d;
+  if(dir){
+    d = dir;  // 来自按键方向
+  } else {
+    d = state.player.dir && (state.player.dir.x!==0 || state.player.dir.y!==0) 
+        ? state.player.dir : {x:0,y:-1}; // 默认用面朝方向
+  }
+
+  const start = { x: state.player.x + d.x*0.5, y: state.player.y + d.y*0.5 };
+  state.bullets.push({
+    x:start.x, y:start.y,
+    vx: d.x*CONFIG.bullet.speed, vy: d.y*CONFIG.bullet.speed,
+    life: CONFIG.bullet.lifeFrames,
+    from:'player', damage: CONFIG.playerDamage, type:'player'
+  });
+  spawnParticles(state.player.x, state.player.y, 6, 0.5);
+  showSpellText("Expelliarmus!", state.player.x, state.player.y);
+}
+
+/* 技能：护盾 / 昏迷 */
+function useShield(){
+  const t = now();
+  if(t < state.player.shieldCdUntil) return;
+  state.player.shieldUntil = t + CONFIG.shield.duration;
+  state.player.shieldCdUntil = t + CONFIG.shield.cooldownMs;
+  spawnParticles(state.player.x, state.player.y, 18, 1, true);
+}
+function useStun(){
+  const t = now();
+  if(t < state.player.stunCdUntil) return;
+  state.player.stunCdUntil = t + CONFIG.stun.cooldownMs;
+  const r = CONFIG.stun.radius;
+  state.enemies.forEach(en=>{
+    const d = Math.hypot(en.x - state.player.x, en.y - state.player.y);
+    if(d <= r){ en.stunnedUntil = t + CONFIG.stun.duration; spawnParticles(en.x, en.y, 20, 1); }
+  });
+  spawnRing(state.player.x, state.player.y, r, 18);
+}
+function showSpellText(text, gx, gy){
+  const base = gridToPx(gx, gy);
+  const p = {
+    x: base.x,
+    y: base.y - 10,   // 出现在玩家头上
+    vx: 0,
+    vy: -0.3,         // 向上飘
+    life: 30,         // 30帧后消失
+    text
+  };
+  state.particles.push(p);
+}
+
+/* 粒子/视觉工具 */
+function spawnParticles(gx, gy, n, speedScale=1, bright=false){
+  const base = gridToPx(gx,gy);
+  for(let i=0;i<n;i++){
+    const ang = Math.random()*Math.PI*2;
+    const sp = Math.random()*2*speedScale;
+    state.particles.push({ x: base.x, y: base.y, vx: Math.cos(ang)*sp*0.06, vy: Math.sin(ang)*0.06 - 0.2, life: randInt(12,40), bright });
+  }
+}
+function spawnRing(gx, gy, radius, count=24){
+  const base = gridToPx(gx,gy);
+  for(let i=0;i<count;i++){
+    const ang = (i/count)*Math.PI*2;
+    const r = (radius * cellSize) * (0.9 + Math.random()*0.25);
+    state.particles.push({ x: base.x + Math.cos(ang)*r, y: base.y + Math.sin(ang)*r, vx: Math.cos(ang)*0.02, vy: Math.sin(ang)*0.02, life: 36, bright: true });
+  }
+}
+
+/* 敌人发射：根据 en.bulletKind 处理三种行为 */
+function enemyTryFire(en){
+  const t = now();
+  if(en.fireCd && t < en.fireCd) return;
+  en.fireCd = t + randInt(600, 1600);
+  if(t < en.stunnedUntil) return;
+
+  const kind = en.bulletKind || (CONFIG.enemy.defaultBulletKind[en.type]) || 'tracking-homing';
+
+  if(kind === 'linear'){
+    const ld = en.lastDir || {x:1,y:0};
+    const mag = Math.hypot(ld.x, ld.y) || 1;
+    const vx = (ld.x/mag) * CONFIG.bullet.enemySpeed;
+    const vy = (ld.y/mag) * CONFIG.bullet.enemySpeed;
+    state.bullets.push({ x: en.x, y: en.y, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemy.bulletDamage, type:'enemy', homing:false });
+  } else if(kind === 'tracking-initial'){
+    // 发射时朝当前玩家位置瞄准，但之后不调整
+    const px = state.player.x, py = state.player.y;
+    const dx = px - en.x, dy = py - en.y;
+    const mag = Math.hypot(dx,dy) || 1;
+    const vx = (dx/mag) * CONFIG.bullet.enemySpeed;
+    const vy = (dy/mag) * CONFIG.bullet.enemySpeed;
+    state.bullets.push({ x: en.x, y: en.y, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemy.bulletDamage, type:'enemy', homing:false });
+  } else { // 'tracking-homing'
+    const px = state.player.x, py = state.player.y;
+    const dx = px - en.x, dy = py - en.y;
+    const mag = Math.hypot(dx,dy) || 1;
+    const vx = (dx/mag) * CONFIG.bullet.enemySpeed;
+    const vy = (dy/mag) * CONFIG.bullet.enemySpeed;
+    state.bullets.push({ x: en.x, y: en.y, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemy.bulletDamage, type:'enemy', homing:true, homingStrength: CONFIG.bullet.homingSteer });
+  }
+
+  spawnParticles(en.x, en.y, 6, 0.6);
+}
+
+/* 主循环 */
+let last = performance.now();
+function loop(nowTime){
+  const dtMs = Math.min(40, nowTime - last);
+  last = nowTime;
+  if(state.running){
+    update(dtMs);
+    render();
+  }
+  if(!state.win && !state.lose) requestAnimationFrame(loop);
+}
+
+
+/* 更新：包含玩家格子移动的插值与重复按键检测 */
+function update(dtMs){
+  const t = now();
+  // 处理按住键的重复移动（如果按住并没有在移动，则在 interval 后再次触发）
+  if(state.keys['arrowup']||state.keys['w']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowup'); }
+  if(state.keys['arrowdown']||state.keys['s']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowdown'); }
+  if(state.keys['arrowleft']||state.keys['a']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowleft'); }
+  if(state.keys['arrowright']||state.keys['d']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowright'); }
+
+  // 玩家移动插值：若在移动则按时间插值 animX/animY，并在到达时设定为整数格
+  if(state.player.moving && state.player.moveTarget){
+    const start = state.player.moveStartAt;
+    const end = state.player.moveEndAt;
+    const ratio = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    state.player.animX = state.player.x + (state.player.moveTarget.x - state.player.x) * ratio;
+    state.player.animY = state.player.y + (state.player.moveTarget.y - state.player.y) * ratio;
+    if(ratio >= 1){
+      // 完成移动：把逻辑坐标设为目标（整数），清除移动状态
+      state.player.x = state.player.moveTarget.x;
+      state.player.y = state.player.moveTarget.y;
+      state.player.animX = state.player.x;
+      state.player.animY = state.player.y;
+      state.player.moving = false;
+      state.player.moveTarget = null;
+    }
+  } else {
+    // 保持 anim 跟随逻辑坐标（若未在移动）
+    state.player.animX += (state.player.x - state.player.animX) * 0.25;
+    state.player.animY += (state.player.y - state.player.animY) * 0.25;
+  }
+
+  if(state.player.hp <= 0 && !state.lose){ state.player.hp = 0; lose(); }
+
+  // 敌人行为
+  state.enemies.forEach(en=>{
+    if(t < en.stunnedUntil){
+      en.animX += (en.x - en.animX) * 0.25;
+      en.animY += (en.y - en.animY) * 0.25;
+      return;
+    }
+    const moveInterval = (en.type === 'chaser') ? CONFIG.enemy.chaserMoveInterval : CONFIG.enemy.wandererMoveInterval;
+    if(!en.lastMoveAt) en.lastMoveAt = 0;
+    if(t - en.lastMoveAt >= moveInterval){
+      en.lastMoveAt = t;
+      if(en.type === 'chaser'){
+        const dx = Math.round(state.player.x) - en.x;
+        const dy = Math.round(state.player.y) - en.y;
+        if(Math.abs(dx) > Math.abs(dy)){
+          const step = Math.sign(dx || 0);
+          if(step !== 0){ en.x += step; en.lastDir = {x: step, y:0}; }
+        } else if(Math.abs(dy) > 0){
+          const step = Math.sign(dy || 0);
+          if(step !== 0){ en.y += step; en.lastDir = {x:0, y:step}; }
+        }
+      } else {
+        if(!en._target || (en._target.x === en.x && en._target.y === en.y)){ en._target = { x: randInt(0,cellCount-1), y: randInt(0,cellCount-1) }; }
+        const dx = en._target.x - en.x, dy = en._target.y - en.y;
+        if(Math.abs(dx) > Math.abs(dy)){ const s = Math.sign(dx||0); if(s!==0){ en.x += s; en.lastDir = {x:s,y:0}; } } 
+        else { const s = Math.sign(dy||0); if(s!==0){ en.y += s; en.lastDir = {x:0,y:s}; } }
+      }
+        en.x = Math.max(0, Math.min(cellCount-1, en.x));
+  en.y = Math.max(0, Math.min(cellCount-1, en.y));
+    }
+    en.animX += (en.x - en.animX) * 0.25;
+    en.animY += (en.y - en.animY) * 0.25;
+
+    const dist = Math.hypot(en.x - state.player.x, en.y - state.player.y);
+    if(dist < 0.9 && t - (en._lastMelee||0) > 600){
+      en._lastMelee = t;
+      const dmg = (en.type==='chaser') ? CONFIG.enemy.chaserMeleeDmg : CONFIG.enemy.wandererMeleeDmg;
+      applyDamageToPlayer(dmg);
+      spawnParticles(state.player.x, state.player.y, 10, 1);
+    }
+
+    // 智能开火
+    const sameRow = Math.round(en.y) === Math.round(state.player.y);
+    const sameCol = Math.round(en.x) === Math.round(state.player.x);
+    if(sameRow || sameCol) enemyTryFire(en);
+    else if(Math.random() < 0.02) enemyTryFire(en);
+  });
+
+  // 子弹更新（支持 homing 调整）
+  for(let i = state.bullets.length - 1; i >= 0; i--){
+    const b = state.bullets[i];
+    if(b.from === 'enemy' && b.homing){
+      const dx = state.player.x - b.x, dy = state.player.y - b.y;
+      const mag = Math.hypot(dx,dy) || 1;
+      const desiredVx = (dx/mag) * CONFIG.bullet.enemySpeed;
+      const desiredVy = (dy/mag) * CONFIG.bullet.enemySpeed;
+      b.vx += (desiredVx - b.vx) * b.homingStrength;
+      b.vy += (desiredVy - b.vy) * b.homingStrength;
+      const s = Math.hypot(b.vx, b.vy) || 1;
+      b.vx = (b.vx / s) * CONFIG.bullet.enemySpeed;
+      b.vy = (b.vy / s) * CONFIG.bullet.enemySpeed;
+    }
+
+    b.x += b.vx * (dtMs/16.67);
+    b.y += b.vy * (dtMs/16.67);
+    b.life--;
+    if(b.life <= 0 || b.x < -1 || b.x > cellCount+1 || b.y < -1 || b.y > cellCount+1){ state.bullets.splice(i,1); continue; }
+
+    if(b.from === 'player'){
+      for(let j=state.enemies.length-1; j>=0; j--){
+        const en = state.enemies[j];
+        const d = Math.hypot(en.x - b.x, en.y - b.y);
+        if(d < 0.6){
+          en.hp -= b.damage;
+          spawnParticles(en.x, en.y, 14, 1);
+          state.bullets.splice(i,1);
+          if(en.hp <= 0){
+            spawnParticles(en.x, en.y, 30, 1.5);
+            state.enemies.splice(j,1);
+            enemyCountEl.textContent = state.enemies.length;
+            checkVictory(); // 关键：敌人被移除后立刻检查胜利
+          }
+          break;
+        }
+      }
+    } else {
+      const d = Math.hypot(state.player.x - b.x, state.player.y - b.y);
+      if(d < 0.7){
+        applyDamageToPlayer(b.damage);
+        spawnParticles(state.player.x, state.player.y, 12, 1);
+        state.bullets.splice(i,1);
+      }
+    }
+  }
+
+  // 粒子更新
+  for(let i=state.particles.length-1;i>=0;i--){
+    const p = state.particles[i];
+    p.life--;
+    p.x += p.vx * (dtMs/16.67);
+    p.y += p.vy * (dtMs/16.67);
+    p.vy += 0.01;
+    if(p.life <= 0) state.particles.splice(i,1);
+  }
+
+  // UI
+  playerHPBar.style.width = Math.max(0, (state.player.hp/state.player.maxHp)*200) + 'px';
+  hpText.textContent = Math.max(0, Math.round(state.player.hp)) + ' / ' + state.player.maxHp;
+  const shieldCD = Math.max(0, Math.ceil((Math.max(0, state.player.shieldCdUntil - t))/1000));
+  const stunCD = Math.max(0, Math.ceil((Math.max(0, state.player.stunCdUntil - t))/1000));
+  cdShieldEl.textContent = shieldCD;
+  cdStunEl.textContent = stunCD;
+  
+}
+
+/* 应用伤害到玩家（考虑护盾） */
+function applyDamageToPlayer(dmg){
+  const t = now();
+  if(t < state.player.shieldUntil){
+    dmg *= CONFIG.shield.reduceFactor;
+    spawnParticles(state.player.x, state.player.y, 8, 0.6, true);
+  }
+  state.player.hp -= dmg;
+  if(state.player.hp <= 0) state.player.hp = 0;
+}
+
+
+/* 胜利/失败 */
+/* 胜利/失败（改为：先显示一次渲染，再停止循环） */
+// 胜利（替换原来的 win()）
+function win() {
+  state.win = true;
+  showMessage('你赢了！所有敌人被击败 🎉');
+  render();
+  state.running = false;
+
+  // 再来一次按钮
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = () => location.reload();
+
+  // 切换 continueBtn：先移除失败监听，再绑定成功监听
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.textContent = "继续游戏";
+  continueBtn.classList.remove('secondary');
+  continueBtn.style.display = "inline-block";
+  continueBtn.addEventListener('click', successHandler);
+}
+
+// 失败（替换原来的 lose()）
+function lose() {
+  state.lose = true;
+  showMessage('你被打败了……再试一次');
+  render();
+  state.running = false;
+
+  // 再来一次按钮
+  restartBtn.textContent = "再来一次";
+  restartBtn.onclick = () => location.reload();
+
+  // 切换 continueBtn：确保只绑定失败逻辑
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.textContent = "不玩了";
+  continueBtn.classList.add('secondary');
+  continueBtn.style.display = "inline-block";
+  continueBtn.addEventListener('click', failHandler);
+}
+function showMessage(txt){
+  messageEl.textContent = txt;
+  messageEl.style.display = 'block';
+  // 确保在最上层并立即触发重绘
+  messageEl.style.zIndex = 9999;
+}
+
+
+/* 渲染：使用 animX/animY 绘制玩家/敌人，使其看起来平滑 */
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<cellCount;i++){
+    for(let j=0;j<cellCount;j++){
+      const x=i*cellSize, y=j*cellSize;
+      ctx.fillStyle = ( (i+j) % 2 === 0 ) ? '#0b6b1f' : '#0a5b17';
+      ctx.fillRect(x+1,y+1,cellSize-2,cellSize-2);
+      ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.strokeRect(x+0.5,y+0.5,cellSize,cellSize);
+    }
+  }
+
+state.particles.forEach(p=>{
+  if(p.text){
+    ctx.font = "14px serif";
+    ctx.fillStyle = "rgba(255,255,255," + (p.life/30) + ")";
+    ctx.fillText(p.text, p.x, p.y);
+  } else {
+    ctx.globalAlpha = Math.max(0, p.life/36);
+    ctx.fillStyle = p.bright ? 'rgba(255,240,200,0.95)' : 'rgba(255,255,255,0.9)';
+    ctx.fillRect(p.x-2, p.y-2, 3, 3);
+    ctx.globalAlpha = 1;
+  }
+});
+
+
+  state.bullets.forEach(b=>{
+    const px = b.x*cellSize, py = b.y*cellSize;
+    ctx.beginPath();
+    ctx.fillStyle = (b.from === 'player') ? 'rgba(180,200,255,0.95)' : 'rgba(255,180,160,0.95)';
+    ctx.arc(px, py, 6,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 0.9;
+    // 外层光晕
+    const grad = ctx.createRadialGradient(px, py, 2, px, py, 12);
+    if(b.from === 'player'){
+    grad.addColorStop(0, 'rgba(200,220,255,1)');
+    grad.addColorStop(1, 'rgba(80,120,255,0)');
+    } else {
+    grad.addColorStop(0, 'rgba(255,200,180,1)');
+    grad.addColorStop(1, 'rgba(255,80,60,0)');
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, 12, 0, Math.PI*2);
+    ctx.fill();
+
+    // 内层核心
+    ctx.beginPath();
+    ctx.fillStyle = (b.from==='player') ? '#bbf' : '#f88';
+    ctx.arc(px, py, 4, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+  });
+
+  state.enemies.forEach(en=>{
+    const px = en.animX*cellSize, py = en.animY*cellSize;
+    if(images.enemy){ ctx.drawImage(images.enemy, px+2, py+2, cellSize-4, cellSize-4); }
+    else { ctx.fillStyle = (en.type==='chaser') ? '#a33' : '#b86'; ctx.fillRect(px+4, py+4, cellSize-8, cellSize-8); }
+    const barW = cellSize-6;
+    ctx.fillStyle='#222'; ctx.fillRect(px+3, py+3, barW, 6);
+    ctx.fillStyle='#e33'; ctx.fillRect(px+3, py+3, Math.max(0, (en.hp/en.maxHp)*barW), 6);
+    if(now() < en.stunnedUntil){ ctx.fillStyle = 'rgba(255,255,180,0.95)'; ctx.fillText('💫', px + cellSize/2 - 6, py + cellSize/2 + 6); }
+    // 子弹类型小标记（方便调试）
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '10px sans-serif';
+    ctx.fillText(en.bulletKind === 'linear' ? '→' : (en.bulletKind === 'tracking-initial' ? '·' : '♢'), px + 4, py + cellSize - 6);
+  });
+
+  // 玩家绘制（使用 animX/animY）
+  const ppx = state.player.animX*cellSize, ppy = state.player.animY*cellSize;
+  if(images.player){ ctx.drawImage(images.player, ppx+2, ppy+2, cellSize-4, cellSize-4); }
+  else { ctx.fillStyle='#33a'; ctx.fillRect(ppx+4, ppy+4, cellSize-8, cellSize-8); }
+  ctx.fillStyle='#222'; ctx.fillRect(ppx+3, ppy+3, cellSize-6, 6);
+  ctx.fillStyle='#0a0'; ctx.fillRect(ppx+3, ppy+3, Math.max(0, (state.player.hp/state.player.maxHp)*(cellSize-6)), 6);
+
+  if(now() < state.player.shieldUntil){
+    const center = gridToPx(state.player.x, state.player.y);
+    ctx.beginPath();
+    ctx.globalAlpha = 0.14 + 0.06*Math.sin(now()/80);
+    ctx.arc(center.x, center.y, cellSize*0.9, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(180,220,255,0.6)'; ctx.fill(); ctx.globalAlpha = 1;
+  }
+}
+
+/* 启动前随机填充（如果用了 count 而不是 list） */
+if(chaserPositions.length===0 && chaserCount>0){ for(let i=0;i<chaserCount;i++) chaserPositions.push({x:randInt(0,cellCount-1), y:randInt(0,cellCount-1)}); }
+if(wandererPositions.length===0 && wandererCount>0){ for(let i=0;i<wandererCount;i++) wandererPositions.push({x:randInt(0,cellCount-1), y:randInt(0,cellCount-1)}); }
+
+if(totalImgs === 0) start();
+
+
+
+</script>
+
+<!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/追求.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>

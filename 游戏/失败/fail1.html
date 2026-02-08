@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>游戏失败</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      background: url("../images/fail1.png") no-repeat center center/cover;
+      font-family: "Microsoft YaHei", sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 右上角按钮 */
+    .next-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+    .next-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* 居中文字 */
+    /* 居中文字 */
+    .text-box {
+      margin: auto;
+      text-align: center;
+      max-width: 80%;
+      line-height: 1.8;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 12px;
+      font-family: "Cinzel", "Times New Roman", serif; /* 更史诗/魔法感的字体 */
+      letter-spacing: 1px;
+      text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    }
+
+    .line {
+      margin: 18px 0;
+      opacity: 0; /* 初始不可见 */
+    }
+
+    /* 第一行：血色闪烁 */
+    .line1 {
+      font-size: 30px;
+      color: #ff4d4d;
+      text-shadow: 0 0 12px rgba(255, 0, 0, 0.8);
+      animation: heartbeat 2s ease-in-out forwards;
+    }
+    @keyframes heartbeat {
+      0% { opacity: 0; transform: scale(0.7); }
+      20% { opacity: 1; transform: scale(1.1); }
+      40% { transform: scale(0.95); }
+      60% { opacity: 1; transform: scale(1.05); }
+      80% { transform: scale(0.98); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* 第二行：淡入 */
+    .line2 {
+      font-size: 24px;
+      color: #f1f1f1;
+      animation: fadeIn 2.5s forwards;
+      animation-delay: 2.5s;
+    }
+
+    /* 第三行：从模糊到清晰 */
+    .line3 {
+      font-size: 22px;
+      color: #d6d6d6;
+      filter: blur(6px);
+      animation: clearIn 3s forwards;
+      animation-delay: 5s;
+    }
+    @keyframes clearIn {
+      from { opacity: 0; filter: blur(6px); }
+      to { opacity: 1; filter: blur(0); }
+    }
+
+    /* 第四行：幽灵般闪烁 */
+    .line4 {
+      font-size: 20px;
+      color: #a3b9ff;
+      font-style: italic;
+      animation: ghostBlink 2.5s infinite;
+      animation-delay: 8s;
+    }
+    @keyframes ghostBlink {
+      0%, 100% { opacity: 0.2; text-shadow: 0 0 6px #7aa2ff; }
+      50% { opacity: 1; text-shadow: 0 0 18px #c6d8ff; }
+    }
+
+    /* 渐隐渐现 */
+    @keyframes fadeIn {
+      from { opacity: 0 }
+      to { opacity: 1 }
+    }
+
+    /* 放大进入 */
+    @keyframes scaleIn {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    /* 闪烁 */
+    @keyframes blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0; }
+    }
+    
+  </style>
+</head>
+<body>
+  <!-- 左上角返回菜单 -->
+
+
+  <a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(1, '../reality.html')">返回菜单</a>
+  <!-- <a class="back-btn" href="../reality.html">返回菜单</a> -->
+
+  <!-- 右上角跳到page.html第6页 -->
+  <!-- <a class="next-btn" href="../page.html?page=6">重新选择（仅测试使用）</a> -->
+<!-- 
+  <a class="next-btn" href="javascript:void(0);" 
+   onclick="unlockEnding(1, '../page.html?page=6')">重新选择（仅测试使用）</a> -->
+
+<!-- <a class="next-btn" href="javascript:void(0);" 
+   onclick="returnToGame()">回到游戏</a> -->
+
+<script>
+function returnToGame() {
+    // 回到游戏入口HTML（比如 index.html）
+    // 并且触发自动加载存档
+    window.location.href = "../project2/index.html";
+}
+</script>
+
+
+  <!-- 文字内容 -->
+  <div class="text-box">
+    <div class="line line1">小路尽头的埃弗里用一个恶咒正中你胸口</div>
+    <div class="line line2">你昏倒在地，双方再次陷入鏖战</div>
+    <div class="line line3">麦格教授（在莉莉报信后）匆匆从城堡赶来<br>把你送至校医院，并罚卢修斯等人关禁闭</div>
+    <div class="line line4">你在一周后才苏醒过来……</div>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+
+
+
+ <style>
+  /* 雨滴样式 */
+  .raindrop {
+    position: fixed;
+    top: -20px;
+    width: 2px;
+    height: 15px;
+    background: rgba(174,194,224,0.6);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* 闪电遮罩 */
+  .lightning {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: white;
+    opacity: 0;
+    z-index: 9999;
+    pointer-events: none;
+  }
+</style>
+
+<div class="lightning"></div>
+<!-- 打雷音效 -->
+<audio id="thunder-sound" src="../musics/打雷声音.flac"></audio>
+
+<script>
+  // 下雨效果
+  function createRaindrop() {
+    const drop = document.createElement("div");
+    drop.classList.add("raindrop");
+    drop.style.left = Math.random() * window.innerWidth + "px";
+    document.body.appendChild(drop);
+
+    let top = -20;
+    const fallSpeed = Math.random() * 4 + 4;
+
+    function fall() {
+      top += fallSpeed;
+      drop.style.top = top + "px";
+
+      if (top > window.innerHeight) {
+        drop.remove();
+        return;
+      }
+      requestAnimationFrame(fall);
+    }
+    requestAnimationFrame(fall);
+  }
+  setInterval(createRaindrop, 10); // 雨量（数值越小雨越大）
+
+  // 闪电效果
+  const lightning = document.querySelector(".lightning");
+  const thunder = document.getElementById("thunder-sound");
+
+  function flashLightning() {
+    lightning.style.opacity = 1;
+    setTimeout(() => { lightning.style.opacity = 0; }, 100);
+    setTimeout(() => { lightning.style.opacity = 1; }, 200);
+    setTimeout(() => { lightning.style.opacity = 0; }, 300);
+
+    // 随机延迟播放打雷声音（0.3s - 3s）
+    const delay = Math.random() * 2700 + 300;
+    setTimeout(() => {
+      thunder.currentTime = 0; // 从头播放
+      thunder.volume = Math.random() * 0.7 + 0.3; // 随机音量（0.3 - 1.0）
+      thunder.play().catch(err => {
+        console.log("音频播放被阻止，需用户交互：", err);
+      });
+    }, delay);
+  }
+
+  // 每隔几秒随机闪电
+  setInterval(() => {
+    if (Math.random() < 0.3) { // 30% 概率闪电
+      flashLightning();
+    }
+  }, 3000);
+</script>
+
+<script src="../achievements.js"></script>
+<script src="../results.js"></script>
+
+</body>
+</html>

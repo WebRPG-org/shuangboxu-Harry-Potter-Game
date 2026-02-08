@@ -1,0 +1,14 @@
+建议使用电脑推荐的屏幕比例！
+游戏项目运行说明
+1.打开 VS Code
+在电脑上启动 Visual Studio Code 编辑器。
+2.打开项目文件夹
+在 VS Code 中点击左上角菜单 “文件 → 打开文件夹”，选择你存放游戏项目的文件夹。
+找到入口文件
+3.在资源管理器（左侧文件树）中找到 index.html 文件。
+使用 Live Server 运行
+4.右键点击 index.html → 选择 “Open with Live Server”（使用 Live Server 打开）。
+如果你没有安装 Live Server 插件，需要先到扩展市场安装。
+5.在浏览器中查看效果
+VS Code 会自动在默认浏览器中打开一个本地地址（如 http://127.0.0.1:5500/index.html）。
+在浏览器中即可开始体验你的游戏。

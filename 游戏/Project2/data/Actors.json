@@ -1,0 +1,11 @@
+[
+null,
+{"id":1,"battlerName":"Actor1_1","characterIndex":0,"characterName":"$james","classId":2,"equips":[2,0,0,3,0],"faceIndex":0,"faceName":"james","traits":[],"initialLevel":1,"maxLevel":99,"name":"詹姆·波特","nickname":"","note":"","profile":""},
+{"id":2,"battlerName":"Actor1_2","characterIndex":1,"characterName":"$lily","classId":2,"equips":[1,0,0,9,0],"faceIndex":0,"faceName":"lily","traits":[],"initialLevel":1,"maxLevel":99,"name":"莉莉·伊万斯","nickname":"","note":"","profile":""},
+{"id":3,"battlerName":"Actor1_3","characterIndex":2,"characterName":"$peter","classId":2,"equips":[31,0,0,0,0],"faceIndex":0,"faceName":"peter","traits":[],"initialLevel":1,"maxLevel":99,"name":"小矮星彼得","nickname":"","note":"","profile":""},
+{"id":4,"battlerName":"Actor1_4","characterIndex":3,"characterName":"$black","classId":2,"equips":[31,0,0,5,0],"faceIndex":0,"faceName":"black","traits":[],"initialLevel":1,"maxLevel":99,"name":"小天狼星布莱克","nickname":"","note":"","profile":""},
+{"id":5,"battlerName":"Actor1_5","characterIndex":4,"characterName":"$lupin","classId":2,"equips":[7,0,0,20,0],"faceIndex":0,"faceName":"lupin","traits":[],"initialLevel":1,"maxLevel":99,"name":"莱姆斯·约翰·卢平","nickname":"","note":"","profile":""},
+{"id":6,"battlerName":"Actor1_6","characterIndex":5,"characterName":"Actor1","classId":2,"equips":[7,0,65,21,0],"faceIndex":5,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"凯西","nickname":"","note":"","profile":""},
+{"id":7,"battlerName":"Actor1_7","characterIndex":6,"characterName":"Actor1","classId":3,"equips":[7,0,0,20,0],"faceIndex":6,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"埃利奥特","nickname":"","note":"","profile":""},
+{"id":8,"battlerName":"Actor1_8","characterIndex":7,"characterName":"$HogwartsHufflepuffJr1Kat_Winteraaa","classId":3,"equips":[7,0,0,20,0],"faceIndex":7,"faceName":"Actor1","traits":[],"initialLevel":1,"maxLevel":99,"name":"罗萨","nickname":"","note":"","profile":""}
+]

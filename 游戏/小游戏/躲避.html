@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>太阳躲避小游戏</title>
+  <style>
+    body { 
+      text-align: center; 
+      background: url("../images/3.jpg") no-repeat center center fixed; 
+      background-size: cover;
+      font-family: "微软雅黑", sans-serif;
+    }
+    canvas { 
+      background: rgba(255, 255, 255, 0.85); 
+      border: 3px solid #333; 
+      border-radius: 10px;
+      margin-top: 20px; 
+      box-shadow: 0 0 20px rgba(255,215,0,0.4); /* 给画布也加点光感 */
+    }
+    #status { 
+      font-size: 20px; 
+      margin-top: 15px; 
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 8px #000;
+    }
+    button { 
+      margin: 10px; 
+      padding: 10px 20px; 
+      font-size: 16px; 
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ffd700, #ffae00);
+      color: #fff;
+      font-weight: bold;
+      box-shadow: 0 0 10px rgba(255,215,0,0.6);
+      transition: transform 0.2s;
+    }
+    button:hover {
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+  <h2 style="color:white; text-shadow:0 0 10px gold;">🌞 太阳躲避战 🌞</h2>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <p id="status"></p>
+  <div id="buttons"></div>
+
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  // 玩家
+  const player = {
+    x: canvas.width / 2,
+    y: canvas.height - 50,
+    radius: 20,
+    speed: 3,
+    img: new Image()
+  };
+  player.img.src = "../images/2.png";
+
+  // 敌人用图片
+  const enemyImg = new Image();
+  enemyImg.src = "../images/1.jpg";
+
+  let enemies = [];
+  let gameOver = false;
+  let spawnRate = 40;
+  let frameCount = 0;
+
+  let gameTime = 15;   // 游戏时长（秒）
+  let hp = 100;        // 初始生命值
+  let timerInterval;
+
+  // ---- 闪光/发光特效参数（从第一个代码移植过来） ----
+  let flashActive = false;
+  let flashAlpha = 0;
+  let flashRadius = 0;
+  let flashX = 0;
+  let flashY = 0;
+  // ----------------------------------------------------
+
+  // 键盘控制
+  let keys = {};
+  document.addEventListener("keydown", e => keys[e.key] = true);
+  document.addEventListener("keyup", e => keys[e.key] = false);
+
+  // 鼠标控制
+  canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    player.x = e.clientX - rect.left;
+  });
+
+  function drawPlayer() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(player.img, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+    ctx.restore();
+  }
+
+  function drawEnemies() {
+    enemies.forEach(e => {
+      // 金色光环
+      ctx.save();
+      ctx.shadowColor = "gold";
+      ctx.shadowBlur = 25;
+
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(enemyImg, e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2);
+
+      ctx.restore();
+    });
+  }
+
+  function updateEnemies() {
+    enemies.forEach(e => e.y += e.speed);
+    enemies = enemies.filter(e => e.y < canvas.height + e.radius);
+  }
+
+  function spawnEnemy() {
+    const radius = 15;
+    const x = Math.random() * (canvas.width - radius * 2) + radius;
+    enemies.push({ x, y: -radius, radius, speed: 3 });
+  }
+
+  function checkCollision() {
+    for (let e of enemies) {
+      let dx = e.x - player.x;
+      let dy = e.y - player.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < e.radius + player.radius) {
+        hp -= 10; // 扣血
+
+        // 触发闪光特效，中心点为碰撞点（移植自第一个代码）
+        flashActive = true;
+        flashAlpha = 1.2;       // 更亮
+        flashRadius = 0;
+        flashX = (player.x + e.x) / 2;  // 碰撞中心
+        flashY = (player.y + e.y) / 2;
+
+        enemies.splice(enemies.indexOf(e), 1); // 删除敌人
+        if (hp <= 0) {
+          endGame(false); // 失败（保持第二个的逻辑不变）
+        }
+      }
+    }
+  }
+
+  // 绘制闪光特效（从第一个代码的 drawFlash 移植过来）
+  function drawFlash() {
+    if (!flashActive) return;
+
+    ctx.save();
+    let gradient = ctx.createRadialGradient(
+      flashX, flashY, flashRadius,    // 内圈
+      flashX, flashY, flashRadius + 350  // 外圈更大
+    );
+    gradient.addColorStop(0, `rgba(255, 255, 150, ${flashAlpha})`);
+    gradient.addColorStop(0.3, `rgba(255, 215, 0, ${flashAlpha * 0.8})`);
+    gradient.addColorStop(1, "rgba(255, 223, 0, 0)");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    // 动画推进：更慢、更大（同样参数）
+    flashRadius += 25;    // 半径扩散更快
+    flashAlpha -= 0.02;   // 衰减更慢，持续时间更长
+
+    if (flashAlpha <= 0) flashActive = false;
+  }
+
+  function updatePlayer() {
+    if (keys["ArrowLeft"] && player.x - player.radius > 0) {
+      player.x -= player.speed;
+    }
+    if (keys["ArrowRight"] && player.x + player.radius < canvas.width) {
+      player.x += player.speed;
+    }
+  }
+
+  function drawStatus() {
+    ctx.font = "16px Arial";
+    ctx.fillStyle = "black";
+    ctx.fillText("剩余时间: " + gameTime + " 秒", 20, 30);
+    ctx.fillText("生命值: " + hp, 20, 55);
+  }
+
+  function endGame(success) {
+    if (gameOver) return;
+    gameOver = true;
+    clearInterval(timerInterval);
+
+    let msg;
+    if (success) {
+      msg = "✅ 成功冲出太阳！";
+      document.getElementById("buttons").innerHTML =
+        `<button onclick="finishMiniGame(true)">下一步</button>`;
+    } else {
+      msg = "❌ 被太阳淹没了！";
+      document.getElementById("buttons").innerHTML =
+        `<button onclick="finishMiniGame(false, 'retry')">我认输</button>  `;
+    }
+    document.getElementById("status").innerText = msg;
+  }
+       //  <button onclick="finishMiniGame(false, 'quit')">不干了</button>
+  function finishMiniGame(success, action) {
+    if (window.opener) {
+      window.opener.postMessage({
+        type: "MiniGameResult",
+        success: success,
+        action: action
+      }, "*");
+      window.close(); // 关闭小游戏窗口，回到RPG Maker
+    } else {
+      // 单独运行时调试用
+      if (action === "retry") {
+        location.reload();
+      } else if (action === "quit") {
+        location.href = "../reality.html";
+      }
+    }
+  }
+
+  function gameLoop() {
+    if (gameOver) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    updatePlayer();
+    updateEnemies();
+
+    frameCount++;
+    if (frameCount % spawnRate === 0) {
+      spawnEnemy();
+      if (spawnRate > 10) spawnRate--; // 越来越快
+    }
+
+    checkCollision();
+
+    drawPlayer();
+    drawEnemies();
+    drawStatus();
+    drawFlash(); // 把闪光特效画进来（确保在 drawEnemies 后绘制）
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  function startGame() {
+    alert(
+      "🌞【太阳躲避小游戏】\n\n" +
+      "- 用鼠标或 ← → 方向键控制小球移动\n" +
+      "- 初始生命值：100\n" +
+      "- 每次撞到敌人扣 10 点生命\n" +
+      "- 游戏时长：15 秒\n\n" +
+      "目标：\n" +
+      "在倒计时结束前存活下来！"
+    );
+
+    timerInterval = setInterval(() => {
+      if (gameTime > 0) {
+        gameTime--;
+      } else {
+        endGame(true);
+      }
+    }, 1000);
+
+    gameLoop();
+  }
+
+  // 开始游戏
+  startGame();
+</script>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Can Can.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>

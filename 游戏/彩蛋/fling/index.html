@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fling! — 8×8 益智实现（关卡版）</title>
+  <style>
+    :root{--cell:64px;--gap:6px;--accent:#6ee7b7}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{
+      background:url("../images/game1.jpg") no-repeat center center/cover;
+      color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:30px
+    }
+
+    .app{display:grid;grid-template-columns:360px 1fr;gap:28px;align-items:start}
+    .panel{background:rgba(0,0,0,0.55);border-radius:14px;padding:18px;box-shadow:0 6px 24px rgba(3,6,23,0.6)}
+
+    .info{width:360px}
+    h1{font-size:20px;margin:0 0 8px;color:var(--accent)}
+    p.small{font-size:13px;opacity:.85;margin:6px 0 12px}
+
+    .controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+    button{background:#071227;border:1px solid rgba(255,255,255,0.05);color:inherit;padding:10px 12px;border-radius:10px;cursor:pointer}
+    button:active{transform:translateY(1px)}
+
+    .counters{display:flex;gap:10px;flex-wrap:wrap}
+    .counter{background:rgba(255,255,255,0.1);padding:8px;border-radius:8px;font-size:13px}
+
+    .board-wrap{display:flex;flex-direction:column;gap:12px}
+
+    .board{width: calc(var(--cell)*8 + var(--gap)*7); height: calc(var(--cell)*8 + var(--gap)*7);
+      background:rgba(255, 255, 255, 0.4);padding:12px;border-radius:12px;box-shadow:inset 0 4px 12px rgba(0,0,0,0.6)}
+
+      .grid{display:grid;grid-template-columns:repeat(8, var(--cell));grid-template-rows:repeat(8,var(--cell));gap:var(--gap);position:relative}
+    .cell{background:rgba(0,0,0,0.35);border-radius:12px;display:flex;align-items:center;justify-content:center;}
+
+    .ball{width:56px;height:56px;border-radius:50%;
+      box-shadow:0 8px 20px rgba(0,0,0,0.6), inset 0 -8px 18px rgba(255,255,255,0.06);
+      display:flex;align-items:center;justify-content:center;position:absolute;
+      transition:transform 260ms cubic-bezier(.2,.9,.2,1),opacity 260ms;cursor:grab}
+    .ball:active{cursor:grabbing}
+    .ball .fuzz {
+      width: 46px; height: 46px; border-radius: 50%;
+      background-size: cover; background-position: center; display: block;
+    }
+
+    .ghost{opacity:.14}
+    .hint{font-size:12px;color:#bcd;opacity:.9}
+    footer{font-size:12px;color:#9fb2c9;margin-top:10px}
+    @media (max-width:900px){.app{grid-template-columns:1fr;}}
+
+    /* 通关弹窗 */
+    #victoryModal {
+      position: fixed; top: 0; left: 0; right:0; bottom:0;
+      background: rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center;
+    }
+    #victoryModal .content {
+      background:#0f1724; padding:20px; border-radius:14px; text-align:center;
+      box-shadow:0 8px 30px rgba(0,0,0,0.7); width:260px;
+    }
+    #victoryModal button {margin:8px 0; width:100%;}
+    /* 金色闪烁光环 */
+.glow {
+  position: relative;
+  animation: goldenGlow 1.8s infinite alternate;
+}
+
+@keyframes goldenGlow {
+  0% {
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.3),
+                0 0 12px rgba(255, 215, 0, 0.4),
+                0 0 18px rgba(255, 215, 0, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.7),
+                0 0 24px rgba(255, 215, 0, 0.9),
+                0 0 36px rgba(255, 215, 0, 1);
+  }
+}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="panel info">
+      <h1>Fling! — 8×8 关卡模式</h1>
+      <p class="small">拖住一个球上下左右拖动并释放，将其撞向另一个球。目标是最后只剩下一个球！</p>
+
+      <div class="controls">
+        <select id="levelSelect"></select>
+        <button id="undoBtn">↶ 返回</button>
+        <button id="resetBtn">⟲ 重置</button>
+        <button id="backBtn">我怂了</button>
+      </div>
+
+      <div class="counters">
+        <div class="counter">移动次数: <span id="moves">0</span></div>
+        <div class="counter">重置次数: <span id="resets">0</span></div>
+        <div class="counter">撤销次数: <span id="undos">0</span></div>
+      </div>
+
+      <p class="hint">提示：关卡进度会自动保存（✅=已完成，❌=未完成）。</p>
+    </div>
+
+    <div class="panel board-wrap">
+      <div class="board" id="board">
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通关弹窗 -->
+  <div id="victoryModal">
+    <div class="content">
+      <h3>🎉 通关成功！</h3>
+      <button id="nextLevelBtn">下一关</button>
+      <button id="quitBtn">不玩了</button>
+    </div>
+  </div>
+
+  <!-- 引入关卡数据 -->
+  <script src="levels.js"></script>
+  <!-- 引入成就脚本（确保路径正确），若不想使用请删除或注释这一行 -->
+  <script src="../../achievements.js"></script>
+
+  <script>
+    const ROWS=8,COLS=8;
+    let currentLevel=0;
+    let initialBalls=[];
+    const gridEl=document.getElementById('grid');
+    const movesEl=document.getElementById('moves');
+    const resetsEl=document.getElementById('resets');
+    const undosEl=document.getElementById('undos');
+    const undoBtn=document.getElementById('undoBtn');
+    const resetBtn=document.getElementById('resetBtn');
+    const backBtn=document.getElementById('backBtn');
+    const levelSelect=document.getElementById('levelSelect');
+
+    const victoryModal=document.getElementById("victoryModal");
+    const nextLevelBtn=document.getElementById("nextLevelBtn");
+    const quitBtn=document.getElementById("quitBtn");
+
+    let board=createEmptyBoard();
+    let balls=[];
+    let moveStack=[];
+    let counters={moves:0,resets:0,undos:0};
+
+    // 防止重复触发通关逻辑（防止多次解锁/多次 show modal）
+    let victoryHandled = false;
+
+    // ============ 初始化 ============
+    function buildGrid(){
+      gridEl.innerHTML='';
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          const cell=document.createElement('div');
+          cell.className='cell';
+          gridEl.appendChild(cell);
+        }
+      }
+    }
+    function createEmptyBoard(){return Array.from({length:ROWS},()=>Array(COLS).fill(0));}
+    function clearBalls(){balls.forEach(b=>b.el.remove());balls=[];}
+    function updateCountersUI(){movesEl.textContent=counters.moves;resetsEl.textContent=counters.resets;undosEl.textContent=counters.undos;}
+
+    function renderFromBoard(){clearBalls();
+      for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+          if(board[r][c]) {
+            spawnBall(r,c,board[r][c]);
+          }
+        }
+      }
+    }
+
+    function spawnBall(r,c,style){
+      const el=document.createElement('div');
+      el.className='ball';
+      const fuzz=document.createElement('div');
+      fuzz.className='fuzz';
+      if (style === "g3") {
+        fuzz.style.backgroundImage = "url('../images/game3.png')";
+      } else {
+        fuzz.style.backgroundImage = "url('../images/game2.jpg')";
+        fuzz.classList.add("glow");  // 给 game2 加金色闪烁
+      }
+    el.appendChild(fuzz);
+      gridEl.appendChild(el);
+      positionElementAtCell(el,r,c);
+      const ballObj={r,c,el};
+      balls.push(ballObj);
+      makeDraggable(ballObj);
+    }
+
+    function positionElementAtCell(el,r,c){const size=64,gap=6;const x=c*(size+gap),y=r*(size+gap);el.style.transform=`translate(${x}px,${y}px)`;}
+    function findBallAt(r,c){return balls.find(b=>b.r===r&&b.c===c);}
+    function pushState(){moveStack.push(JSON.parse(JSON.stringify(board)));if(moveStack.length>50)moveStack.shift();}
+    function undo(){if(moveStack.length===0)return;board=moveStack.pop();renderFromBoard();counters.undos++;updateCountersUI();}
+    function resetToInitial(){board=createEmptyBoard();initialBalls.forEach(pt=>{board[pt[0]][pt[1]]=pt[2]||"g2";});moveStack=[];renderFromBoard();counters.resets++;updateCountersUI();}
+
+    function validCell(r,c){return r>=0&&r<ROWS&&c>=0&&c<COLS;}
+    function flingBall(b,dir){
+      const dr=dir==='up'?-1:dir==='down'?1:0;
+      const dc=dir==='left'?-1:dir==='right'?1:0;
+      let r=b.r+dr,c=b.c+dc,distance=1;
+      while(validCell(r,c)&&board[r][c]===0){r+=dr;c+=dc;distance++;}
+      if(!validCell(r,c)||distance===1){flashInvalid(b.el);return false;}
+      const targetR=r,targetC=c;const destR=targetR-dr,destC=targetC-dc;
+      pushState();
+      const targetBall=findBallAt(targetR,targetC);
+      board[b.r][b.c]=0;board[targetR][targetC]=0;board[destR][destC]=b.el.querySelector(".fuzz").style.backgroundImage.includes("game3.png")?"g3":"g2";
+      counters.moves++;updateCountersUI();
+      animateMoveAndEject(b,destR,destC,targetBall,dir);
+      return true;
+    }
+    function animateMoveAndEject(mover,nr,nc,targetBall,dir){
+      positionElementAtCell(mover.el,nr,nc);
+      mover.r=nr;mover.c=nc;
+      if(targetBall){
+        const ejectDistance=Math.max(window.innerWidth,window.innerHeight)*1.2;
+        targetBall.el.style.transition='transform 520ms ease-in,opacity 420ms ease-in';
+        const dx=dir==='left'?-ejectDistance:dir==='right'?ejectDistance:0;
+        const dy=dir==='up'?-ejectDistance:dir==='down'?ejectDistance:0;
+        targetBall.el.style.transform+=` translate(${dx}px,${dy}px)`;
+        targetBall.el.style.opacity='0';
+        setTimeout(()=>{targetBall.el.remove();balls=balls.filter(b=>b!==targetBall);checkVictory();},540);
+      }else{checkVictory();}
+    }
+    function flashInvalid(el){el.classList.add('ghost');setTimeout(()=>el.classList.remove('ghost'),260);}
+
+    // 成就处理：通关时自动触发（第6 一次性；第7 计次，计数键 eggSuccesses，需 3 次解锁）
+    function handleVictoryAchievements() {
+      // 仅处理一次
+      try {
+        if (typeof unlockAchievement === 'function') {
+          unlockAchievement(6); // 第6：一次性解锁
+        } else {
+          console.warn('unlockAchievement 未定义，未能解锁第6成就（请确认 achievements.js 已加载）');
+        }
+
+        if (typeof unlockCountAchievement === 'function') {
+          // 不传 redirectUrl，避免自动跳转
+          unlockCountAchievement(7, 'eggSuccesses', 3);
+        } else {
+          console.warn('unlockCountAchievement 未定义，无法为第7计数（请确认 achievements.js 已加载）');
+        }
+      } catch (e) {
+        console.error('记录成就时出错：', e);
+      }
+    }
+
+    function checkVictory(){
+      const remain=board.flat().filter(x=>x!==0).length;
+      if(remain===1 && !victoryHandled){
+        victoryHandled = true; // 防止重复进入
+        // 触发成就（成功即触发，不需要点击）
+        handleVictoryAchievements();
+
+        setTimeout(()=>{
+          victoryModal.style.display="flex";
+          markLevelComplete(currentLevel);
+        },150);
+      }
+    }
+
+    function makeDraggable(ball){
+      let startX=0,startY=0,dragging=false;const mvEl=ball.el;
+      mvEl.addEventListener('mousedown',e=>{startX=e.clientX;startY=e.clientY;dragging=true;mvEl.style.transition='none';});
+      window.addEventListener('mousemove',e=>{if(!dragging)return;const dx=e.clientX-startX,dy=e.clientY-startY;mvEl.style.transform=`translate(${ball.c*(64+6)+dx}px,${ball.r*(64+6)+dy}px)`;});
+      window.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;mvEl.style.transition='transform 180ms';const dx=e.clientX-startX,dy=e.clientY-startY;const absX=Math.abs(dx),absY=Math.abs(dy);if(Math.max(absX,absY)<18){positionElementAtCell(mvEl,ball.r,ball.c);return;}const dir=absX>absY?(dx>0?'right':'left'):(dy>0?'down':'up');const success=flingBall(ball,dir);if(!success)positionElementAtCell(mvEl,ball.r,ball.c);});
+    }
+
+    // ============ 关卡管理 ============
+    function initLevelMenu(){
+      levelSelect.innerHTML='';
+      for(let i=0;i<LEVELS.length;i++){
+        const opt=document.createElement('option');
+        opt.value=i;
+        const completed=isLevelCompleted(i)?"✅":"❌";
+        opt.textContent=`${completed} 关卡 ${i+1}`;
+        levelSelect.appendChild(opt);
+      }
+      levelSelect.value=currentLevel;
+    }
+    function loadLevel(idx){
+      currentLevel=idx;
+      initialBalls=LEVELS[idx];
+      resetToInitial();
+      initLevelMenu();
+      // 每次加载新关，重置 victoryHandled，允许通关触发一次
+      victoryHandled = false;
+    }
+    function markLevelComplete(idx){
+      localStorage.setItem(`fling_level_${idx}`,"done");
+      initLevelMenu();
+    }
+    function isLevelCompleted(idx){return localStorage.getItem(`fling_level_${idx}`)==="done";}
+
+    // ============ 事件绑定 ============
+    undoBtn.addEventListener('click',undo);
+    resetBtn.addEventListener('click',resetToInitial);
+    backBtn.addEventListener('click',()=>{window.location.href="../index1.html";});
+    levelSelect.addEventListener('change',()=>loadLevel(parseInt(levelSelect.value)));
+    nextLevelBtn.addEventListener("click",()=>{
+      victoryModal.style.display="none";
+      if(currentLevel+1<LEVELS.length){
+        loadLevel(currentLevel+1);
+      }else{
+        alert("🎉 全部关卡完成！");
+        window.location.href="../index1.html";
+      }
+    });
+    quitBtn.addEventListener("click",()=>{window.location.href="../index1.html";});
+
+    // ============ 初始化 ============
+    buildGrid();
+    loadLevel(0);
+  </script>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../../musics/In Noctem.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>魔法喷泉 — 扔硬币小游戏（像素判定版）</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#07070a;
+      --panel-bg: rgba(4,6,12,0.75);
+      --accent:#85d7ff;
+      --muted:#cfcfcf;
+      --pill-bg: rgba(255,255,255,0.03);
+      --pill-unlocked-start: #ffd700;
+      --pill-unlocked-end: #ffda6a;
+    }
+    html,body{height:100%;background:var(--bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Hiragino Sans GB","Microsoft YaHei",Arial;color:#e6eef8}
+    .screen{position:relative;max-width:1100px;margin:18px auto;padding:18px;border-radius:16px;overflow:hidden;background:linear-gradient(180deg, rgba(4,6,12,0.75), rgba(12,8,20,0.85));box-shadow:0 10px 40px rgba(0,0,0,0.6)}
+    .stage{position:relative;height:640px;border-radius:12px;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding:24px;background:#000}
+
+    /* 奖项状态面板（左上）—— pill 风格，显示完整奖项文字 */
+    .prize-status{
+      position:absolute;
+      left:18px;
+      top:18px;
+      z-index:260;
+      display:flex;
+      gap:8px;
+      padding:10px;
+      border-radius:12px;
+      background:rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
+      align-items:center;
+      box-shadow:0 8px 26px rgba(0,0,0,0.45);
+      flex-wrap:wrap;
+      max-width:46%;
+    }
+    .prize-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      background:var(--pill-bg);
+      border:1px solid rgba(255,255,255,0.04);
+      font-size:13px;
+      color:var(--muted);
+      min-height:36px;
+      box-shadow:0 6px 14px rgba(0,0,0,0.35);
+    }
+    .prize-pill .name{font-weight:700; font-size:13px; color:#eaf8ff; text-shadow:0 4px 10px rgba(0,0,0,0.45)}
+    .prize-pill.unlocked{
+      background: linear-gradient(180deg, var(--pill-unlocked-start), var(--pill-unlocked-end));
+      color:#14324a;
+      box-shadow:0 8px 20px rgba(255,200,50,0.12);
+      border:1px solid rgba(0,0,0,0.08);
+      transform: translateY(-3px);
+    }
+    .prize-pill .check{font-weight:900; margin-left:4px; display:inline-block; font-size:13px;}
+    .prize-summary{
+      margin-left:8px;
+      font-size:12px;
+      color:#dceffb;
+      opacity:0.95;
+      align-self:center;
+      font-weight:600;
+    }
+
+    /* 真实喷泉图片元素 */
+    #fountainImg{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;pointer-events:none;filter:contrast(1.02) saturate(1.05)}
+
+    /* 覆盖画布 */
+    canvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+
+    .player{position:absolute;left:28px;bottom:28px;display:flex;align-items:center;gap:12px;z-index:40}
+    .player img{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,0.6);border:2px solid rgba(255,255,255,0.06)}
+    .player .meta{color:#fff;text-shadow:0 6px 20px rgba(0,0,0,0.6)}
+    .player .meta .title{font-weight:800; font-size:16px; letter-spacing:0.2px}
+    .player .meta .sub{font-size:13px;color:#dbe9f5;margin-top:4px;max-width:320px;line-height:1.25}
+
+    .controls{position:absolute;right:28px;bottom:32px;z-index:40;display:flex;flex-direction:column;gap:12px;align-items:flex-end}
+    .power-wrap{width:320px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:10px;border-radius:12px;backdrop-filter:blur(4px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    .power-wrap .hint{font-size:14px;color:#e6f6ff;text-shadow:0 6px 30px rgba(80,130,180,0.04);padding:6px 8px;border-radius:8px}
+    .power-bar{height:14px;background:rgba(0,0,0,0.25);border-radius:8px;overflow:hidden;margin-top:8px}
+    .power-fill{height:100%;width:0%;transition:width 0.08s linear;background:linear-gradient(90deg,#85d7ff,#4fb3ff);box-shadow:0 4px 18px rgba(80,160,240,0.12)}
+    .btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:700;letter-spacing:0.6px}
+    .btn-throw{background:linear-gradient(180deg,#6a9bdc,#3765a8);color:white;box-shadow:0 8px 26px rgba(55,101,168,0.24)}
+
+    .result{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(3,3,6,0.5), rgba(3,3,6,0.7));z-index:120;backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity 240ms}
+    .result.show{opacity:1;pointer-events:auto}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border-radius:12px;padding:22px 28px;min-width:360px;max-width:80%;text-align:center;box-shadow:0 20px 60px rgba(6,6,12,0.7)}
+    .card h2{color:#bfe8ff;margin-bottom:10px;text-shadow:0 8px 40px rgba(80,130,180,0.08);font-size:22px}
+    .card p{color:#e9f6ff;margin-bottom:18px;white-space:pre-wrap;font-size:15px;line-height:1.45}
+    .card .actions{display:flex;gap:12px;justify-content:center}
+    .btn-retry{background:#1f2937;color:#fff;padding:10px 16px;border-radius:8px}
+    .btn-continue{background:#0ea5a4;color:#fff;padding:10px 16px;border-radius:8px}
+
+    /* 右上设置按钮 */
+.settings-toggle {
+  position:absolute;
+  right:18px;
+  top:18px;
+  z-index:200;
+  padding:10px 16px;
+  border-radius:10px;
+  background:linear-gradient(180deg,#4fb3ff,#1f89d6); /* 渐变蓝底 */
+  color:#fff; /* 白字 */
+  font-weight:700;
+  border:2px solid rgba(255,255,255,0.2);
+  box-shadow:0 4px 12px rgba(0,150,255,0.5); /* 外发光 */
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
+.settings-toggle:hover {
+  transform:scale(1.05);
+  box-shadow:0 6px 16px rgba(0,150,255,0.75);
+}
+.settings-toggle:active {
+  transform:scale(0.97);
+}
+
+    /* 中央弹出的奖项设置图片（覆盖） */
+    #settingsOverlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;max-height:70%;z-index:190;display:none;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.6);background:rgba(0,0,0,0.45);padding:12px}
+    #settingsOverlay img{display:block;width:100%;height:100%;object-fit:contain;border-radius:8px}
+
+    /* 页面首次弹窗：规则 + 奖项图片（需要手动关闭） */
+    #welcomeModal{
+      position:fixed;
+      left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      z-index:1000;
+      width:min(880px, 92%);
+      max-height:86vh;
+      overflow:auto;
+      border-radius:12px;
+      background:linear-gradient(180deg, rgba(10,12,18,0.98), rgba(8,10,16,0.98));
+      box-shadow:0 30px 80px rgba(0,0,0,0.7);
+      padding:18px;
+      display:flex;
+      gap:18px;
+      align-items:flex-start;
+    }
+    #welcomeModal .left{
+      flex:1 1 420px;
+      color:#e9f9ff;
+      font-size:15px;
+      line-height:1.5;
+    }
+    #welcomeModal .left h3{font-size:18px;margin-bottom:8px;color:#bff3ff}
+    #welcomeModal .left ul{margin-top:8px;margin-left:18px}
+    #welcomeModal .right{
+      width:360px;
+      flex:0 0 360px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      align-items:center;
+    }
+    #welcomeModal img{width:100%;height:auto;border-radius:8px;object-fit:contain;border:1px solid rgba(255,255,255,0.04)}
+    #welcomeModal .closeBtn{
+      margin-top:8px;
+      background:linear-gradient(180deg,#4fb3ff,#1f89d6);
+      border:none;color:white;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer;
+    }
+
+    /* 遮罩（阻止交互） */
+    #modalBackdrop{
+      position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.56);z-index:999;
+    }
+
+    @media (max-width:640px){
+      .stage{height:520px}.player img{width:64px;height:64px}.power-wrap{width:200px}
+      #welcomeModal{flex-direction:column;padding:12px}
+      #welcomeModal .right{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <!-- 新增：左上角显示奖项（文字形式：一等奖、二等奖...） -->
+    <div id="prizeStatus" class="prize-status" aria-live="polite" title="已解锁的奖项"></div>
+
+    <div class="stage" id="stage" aria-label="游戏舞台">
+      <!-- 喷泉图片作为 img，便于像素取样 -->
+      <img id="fountainImg" src="../images/喷泉.png" alt="fountain">
+
+      <!-- canvas 用来画硬币轨迹、特效与分区指示 -->
+      <canvas id="fx"></canvas>
+
+      <!-- 右上角设置按钮 -->
+      <button id="toggleSettings" class="settings-toggle" title="显示/隐藏 奖项设置图片">查看/关闭奖项</button>
+
+      <!-- 中心的奖项设置/说明图片（点击按钮显示/隐藏） -->
+      <div id="settingsOverlay" aria-hidden="true">
+        <img src="../images/喷泉奖励.png" alt="奖项设置（示意）">
+      </div>
+
+      <!-- 玩家头像 -->
+      <div class="player" id="player" title="在喷泉图片上按住任意一点以决定发射方向：按住蓄力，拖动调整方向，松手释放硬币">
+        <img src="../images/01.png" alt="player">
+        <div class="meta">
+          <div class="title">你</div>
+          <div class="sub">在喷泉任意点按住为瞄准方向 — 松手即可投掷；蓄力越久，力度越大（最长 1.4 秒）。</div>
+        </div>
+      </div>
+
+      <!-- 控件区 -->
+      <div class="controls">
+        <div class="power-wrap">
+          <div class="hint">规则：在喷泉图片上按住任意一点表示发射方向；按住可蓄力，拖动调整方向，松手释放硬币（触屏同理）。</div>
+          <div class="power-bar" aria-hidden>
+            <div id="powerFill" class="power-fill"></div>
+          </div>
+        </div>
+        <button id="throwBtn" class="btn btn-throw" style="display:none">投掷/释放</button>
+      </div>
+
+      <!-- 结果弹窗 -->
+      <div id="result" class="result" role="dialog" aria-modal="true">
+        <div class="card">
+          <h2 id="resultTitle">得分</h2>
+          <p id="resultText">你命中了……</p>
+          <div class="actions">
+            <button id="retry" class="btn-retry btn">再来一次</button>
+            <button id="continue" class="btn-continue btn">其他游戏</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 首次进入展示的规则 + 奖项图片（必须手动关闭） -->
+  <div id="modalBackdrop"></div>
+  <div id="welcomeModal" role="dialog" aria-modal="true" aria-label="游戏规则与奖项说明">
+    <div class="left">
+      <h3>游戏规则（请先阅读）</h3>
+      <p>1. 在喷泉图片上按住任意一点作为投掷方向，按住可蓄力（最长 1.4 秒），拖动可调整方向，松手释放硬币。触屏同理。</p>
+      <p>2. 硬币落在喷泉的蓝色区域并满足像素判定后会“消失”，消失位置会对应一个奖项（一等奖 ~ 六等奖）。</p>
+      <p>3. 奖项分布与区域有关，目标位置越靠近指定区域越有可能命中对应奖项。收集全部 6 个奖项可触发额外成就。</p>
+      <ul>
+        <!-- <li>注意：投掷时请尽量观察上方的半透明指引区域帮助定位。</li> -->
+        <li>每次命中会弹出结果卡，未命中会提示并可重试。</li>
+      </ul>
+      <p style="margin-top:10px;font-weight:700;color:#bfe8ff">关闭此框后即可开始游戏（在弹窗关闭前，页面投掷功能被暂时锁定）。</p>
+    </div>
+    <div class="right">
+      <img src="../images/喷泉奖励.png" alt="奖项示意">
+      <button id="closeWelcome" class="closeBtn">我知道了，开始游戏</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('fx');
+    const stage = document.getElementById('stage');
+    const fountainImg = document.getElementById('fountainImg');
+    const resEl = document.getElementById('result');
+    const resultTitle = document.getElementById('resultTitle');
+    const resultText = document.getElementById('resultText');
+    const powerFill = document.getElementById('powerFill');
+    const throwBtn = document.getElementById('throwBtn');
+    const retryBtn = document.getElementById('retry');
+    const continueBtn = document.getElementById('continue');
+    const toggleSettingsBtn = document.getElementById('toggleSettings');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const prizeStatusEl = document.getElementById('prizeStatus');
+
+    const ctx = canvas.getContext('2d');
+
+    // offscreen canvas 用于存放喷泉图片像素（与显示大小一致，便于像素对应）
+    let imgCanvas = document.createElement('canvas');
+    let imgCtx = imgCanvas.getContext('2d');
+
+    function resizeCanvas(){
+      canvas.width = stage.clientWidth * devicePixelRatio;
+      canvas.height = stage.clientHeight * devicePixelRatio;
+      canvas.style.width = stage.clientWidth + 'px';
+      canvas.style.height = stage.clientHeight + 'px';
+      ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+
+      // 同步更新 imgCanvas 大小，并把图片按舞台大小绘制到 offscreen canvas
+      imgCanvas.width = stage.clientWidth;
+      imgCanvas.height = stage.clientHeight;
+      if(fountainImg.complete && fountainImg.naturalWidth){
+        try{ imgCtx.drawImage(fountainImg, 0, 0, imgCanvas.width, imgCanvas.height); }catch(e){}
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+    fountainImg.addEventListener('load', ()=>{ resizeCanvas(); });
+
+    // 调整喷泉判定区域阈值（百分比）
+    const bounds = {
+      xMinPct: 25.3, xMaxPct: 78.5,
+      yMinPct: 25.3, yMaxPct: 83.1,
+      topPrizeMaxPct: 42.3, secondPrizeMaxPct: 57.7,
+      // 左右切割线
+      leftRightSplitPct: 50.4
+    };
+
+    // 两个目标蓝色（示例）
+    const blue1 = [35,160,246];
+    const blue2 = [68,223,250];
+    const colorThresh = 70; // RGB 距离阈值
+
+    // Coin 类，半径改小些
+    class Coin {
+      constructor(x,y,vx,vy){
+        this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.radius = 12; this.alive = true;
+        this.image = new Image(); this.image.src = '../images/金币.png';
+      }
+      update(dt){
+        const g = 700; const drag = 0.995;
+        this.vy += g * dt;
+        this.vx *= drag; this.vy *= drag;
+        this.x += this.vx * dt; this.y += this.vy * dt;
+      }
+      draw(ctx){
+        ctx.save(); ctx.translate(this.x, this.y);
+        const angle = Math.atan2(this.vy, this.vx || 1);
+        ctx.rotate(angle);
+        try{ ctx.drawImage(this.image, -this.radius, -this.radius, this.radius*2, this.radius*2); }catch(e){}
+        ctx.restore();
+      }
+    }
+
+    let activeCoin = null;
+    let particles = [];
+    let modalOpen = true; // 页面首次弹窗打开时锁定交互
+
+    function spawnParticles(x,y,count,kind){
+      for(let i=0;i<count;i++){
+        const a = Math.random()*Math.PI*2; const speed = (0.6+Math.random()*1.8) * (kind==='star'?120:80);
+        particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,life:0,ttl:0.7 + Math.random()*0.6,kind});
+      }
+    }
+
+    // 判断像素颜色是否接近目标蓝色
+    function isBluePixel(px){
+      if(!px) return false;
+      const r = px[0], g = px[1], b = px[2], a = px[3];
+      if(a === 0) return false;
+      function dist(c){
+        return Math.sqrt((r-c[0])**2 + (g-c[1])**2 + (b-c[2])**2);
+      }
+      return dist(blue1) <= colorThresh || dist(blue2) <= colorThresh;
+    }
+
+    // 检测是否应当“消失”在喷泉中，并判定 6 个档位
+    function testCoinDisappear(coin){
+      if(!imgCtx) return false;
+      const x = Math.round(coin.x); const y = Math.round(coin.y);
+      if(x < 0 || y < 0 || x >= imgCanvas.width || y >= imgCanvas.height) return false;
+      const px = imgCtx.getImageData(x, y, 1, 1).data;
+      const blue = isBluePixel(px);
+      if(!blue) return false;
+      const xPct = (x / imgCanvas.width) * 100;
+      const yPct = (y / imgCanvas.height) * 100;
+      if(yPct < bounds.yMinPct || yPct > bounds.yMaxPct) return false;
+      if(xPct < bounds.xMinPct || xPct > bounds.xMaxPct) return false;
+      const isLeft = xPct <= bounds.leftRightSplitPct;
+      let prizeId = null;
+      if(yPct >= bounds.yMinPct && yPct <= bounds.topPrizeMaxPct){
+        prizeId = isLeft ? 'fourth' : 'third';
+      } else if(yPct > bounds.topPrizeMaxPct && yPct <= bounds.secondPrizeMaxPct){
+        prizeId = isLeft ? 'fifth' : 'second';
+      } else {
+        prizeId = isLeft ? 'sixth' : 'first';
+      }
+      return {prize: prizeId, xPct, yPct};
+    }
+
+    // 投掷
+    function throwCoin(targetX, targetY, powerNorm){
+      // 若弹窗未关闭则禁止投掷
+      if(modalOpen) return;
+      const startX = 28 + 84/2 + 6; const startY = stage.clientHeight - 28 - 84/2;
+      const dx = targetX - startX; const dy = targetY - startY; const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const speed = 420 + powerNorm * 900;
+      const vx = (dx/dist) * speed; const vy = (dy/dist) * speed - 200 * powerNorm;
+      activeCoin = new Coin(startX, startY, vx, vy);
+    }
+
+    // 输入处理（所有输入在 modalOpen 为 true 时被忽略）
+    let charging = false; let chargeStartTime = 0; let lastPointer = {x:0,y:0}; let pointerDown = false; let chargeLevel = 0;
+    function getRelPos(e){ const rect = stage.getBoundingClientRect(); const p = e.touches? e.touches[0] : e; return {x: p.clientX - rect.left, y: p.clientY - rect.top}; }
+    function pointerStart(e){ 
+      if(modalOpen) return; // 锁定
+      e.preventDefault(); pointerDown=true; charging=true; chargeStartTime=performance.now(); lastPointer=getRelPos(e); powerTick(); 
+    }
+    function pointerMove(e){ if(!pointerDown) return; lastPointer = getRelPos(e); }
+    function pointerEnd(e){ if(!pointerDown) return; pointerDown=false; charging=false; const p = lastPointer; const now = performance.now(); const dt = Math.min(1400, now - chargeStartTime); const norm = Math.min(1, dt/1400); powerFill.style.width='0%'; throwCoin(p.x,p.y,norm); }
+    function powerTick(){ if(!charging) return; const now = performance.now(); chargeLevel = Math.min(1, (now - chargeStartTime) / 1400); powerFill.style.width = (chargeLevel*100|0) + '%'; requestAnimationFrame(powerTick); }
+
+    stage.addEventListener('mousedown', pointerStart); stage.addEventListener('touchstart', pointerStart,{passive:false});
+    window.addEventListener('mousemove', pointerMove); window.addEventListener('touchmove', pointerMove,{passive:false});
+    window.addEventListener('mouseup', pointerEnd); window.addEventListener('touchend', pointerEnd);
+    throwBtn.addEventListener('click', ()=>{ if(modalOpen) return; if(charging){ pointerEnd({}); } else { charging=true; chargeStartTime=performance.now()-600; setTimeout(()=>{ pointerEnd({}); },60); } });
+
+    // 更新渲染循环
+    let last = performance.now();
+    function loop(now){
+      const dt = Math.min(0.05, (now - last)/1000); last = now;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // 绘制一些导引（淡）
+      drawGuides();
+
+      // 粒子更新
+      for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life+=dt; if(p.life>p.ttl){particles.splice(i,1);continue} p.vy += 300*dt; p.vx *= 0.99; p.vy *= 0.99; p.x += p.vx*dt; p.y += p.vy*dt; const alpha = 1 - p.life/p.ttl; ctx.save(); ctx.globalAlpha=alpha; ctx.beginPath(); ctx.arc(p.x,p.y, p.kind==='star'?2.2:2.6,0,Math.PI*2); ctx.fillStyle = p.kind==='star' ? 'rgba(255,230,150,'+alpha+')' : 'rgba(170,220,255,'+alpha*0.9+')'; ctx.fill(); ctx.restore(); }
+
+      // 硬币更新
+      if(activeCoin){ activeCoin.update(dt); activeCoin.draw(ctx);
+        // 每帧尝试从喷泉图像像素检测
+        const test = testCoinDisappear(activeCoin);
+        if(test){
+          spawnParticles(activeCoin.x, activeCoin.y, 28, 'star');
+          showPrize(test.prize, test.xPct, test.yPct);
+          activeCoin = null;
+        } else if(activeCoin.y > stage.clientHeight + 80 || activeCoin.x < -80 || activeCoin.x > stage.clientWidth + 80){
+          handleMiss(); activeCoin = null;
+        }
+      }
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    function drawGuides(){
+      // 画出用户感知的目标区（非常弱的可视化）
+      ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = '#87d3ff';
+      const xMin = (bounds.xMinPct/100) * stage.clientWidth; const xMax = (bounds.xMaxPct/100) * stage.clientWidth;
+      const yMin = (bounds.yMinPct/100) * stage.clientHeight; const yMax = (bounds.yMaxPct/100) * stage.clientHeight;
+      ctx.fillRect(xMin, yMin, xMax-xMin, yMax-yMin);
+
+      // 分界线
+      const splitX = (bounds.leftRightSplitPct/100) * stage.clientWidth;
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.03;
+      ctx.fillRect(splitX-1, yMin, 2, yMax - yMin);
+
+      ctx.restore();
+    }
+
+    // --------- 奖项记录（localStorage）相关（6 个奖项） ----------
+    const BASE_STORAGE_KEY = 'fountain_prizes_v2';
+
+    function getCurrentUser(){
+      const u = localStorage.getItem('currentUser');
+      return u ? u : null;
+    }
+
+    function getPerUserKey(){
+      const user = getCurrentUser();
+      return user ? `${BASE_STORAGE_KEY}::${user}` : `${BASE_STORAGE_KEY}::guest`;
+    }
+
+    function defaultPrizes(){
+      return {first:false, second:false, third:false, fourth:false, fifth:false, sixth:false};
+    }
+
+    function loadPrizes(){
+      try{
+        const raw = localStorage.getItem(getPerUserKey());
+        if(!raw) return defaultPrizes();
+        const parsed = JSON.parse(raw);
+        return {
+          first: !!parsed.first,
+          second: !!parsed.second,
+          third: !!parsed.third,
+          fourth: !!parsed.fourth,
+          fifth: !!parsed.fifth,
+          sixth: !!parsed.sixth
+        };
+      }catch(e){
+        return defaultPrizes();
+      }
+    }
+    function savePrizes(obj){
+      try{ localStorage.setItem(getPerUserKey(), JSON.stringify(obj)); }catch(e){}
+    }
+
+    function markPrize(prize){
+      const p = loadPrizes();
+      const already = !!p[prize];
+      if(!already){
+        if(prize === 'first') p.first = true;
+        else if(prize === 'second') p.second = true;
+        else if(prize === 'third') p.third = true;
+        else if(prize === 'fourth') p.fourth = true;
+        else if(prize === 'fifth') p.fifth = true;
+        else if(prize === 'sixth') p.sixth = true;
+        savePrizes(p);
+        renderPrizeStatus();
+        return true;
+      }
+      renderPrizeStatus();
+      return false;
+    }
+
+    function countUnlocked(){
+      const p = loadPrizes();
+      return Object.values(p).filter(v => v).length;
+    }
+    function allCollected(){
+      const p = loadPrizes();
+      return p.first && p.second && p.third && p.fourth && p.fifth && p.sixth;
+    }
+    // -----------------------------------------------
+
+    // 奖项 id -> 中文名
+    const prizeOrder = ['first','second','third','fourth','fifth','sixth'];
+    const prizeNames = {
+      first: '一等奖',
+      second: '二等奖',
+      third: '三等奖',
+      fourth: '四等奖',
+      fifth: '五等奖',
+      sixth: '六等奖'
+    };
+
+    // 渲染奖项面板（显示完整奖项文字，如 “一等奖” 等）
+    function renderPrizeStatus(){
+      const p = loadPrizes();
+      prizeStatusEl.innerHTML = '';
+      prizeOrder.forEach((key) => {
+        const unlocked = !!p[key];
+        const pill = document.createElement('div');
+        pill.className = 'prize-pill' + (unlocked ? ' unlocked' : '');
+        pill.setAttribute('aria-pressed', unlocked ? 'true' : 'false');
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = prizeNames[key] || key;
+        const checkEl = document.createElement('div');
+        checkEl.className = 'check';
+        checkEl.textContent = unlocked ? '✓' : '';
+        pill.appendChild(nameEl);
+        pill.appendChild(checkEl);
+        prizeStatusEl.appendChild(pill);
+      });
+      // summary
+      const summary = document.createElement('div');
+      summary.className = 'prize-summary';
+      summary.textContent = `${countUnlocked()}/6 已解锁`;
+      prizeStatusEl.appendChild(summary);
+    }
+
+    function showPrize(prize, xPct, yPct){
+      const wasNew = markPrize(prize);
+      const unlockedCount = countUnlocked();
+
+      const prizeLabel = prizeNames[prize] || prize;
+      let title = `命中：${prizeLabel}`;
+      let text = `位置：${yPct.toFixed(1)}%（x=${xPct.toFixed(1)}%）。\n奖励：${prizeLabel}\n\n`;
+
+      if(wasNew){
+        text += `本次新解锁：${prizeLabel} 🎉\n`;
+      } else {
+        text += `你之前已经解锁过 ${prizeLabel}。\n`;
+      }
+
+      text += `已解锁 ${unlockedCount}/6 个奖项。`;
+
+      if(unlockedCount < 6){
+        text += '\n\n继续尝试收集剩余奖项吧！';
+      } else {
+        text += '\n\n恭喜！已收集全部六个奖项';
+      }
+
+      resultTitle.textContent = title;
+      resultText.textContent = text;
+      resEl.classList.add('show');
+
+      updateButtons();
+    }
+    function handleMiss(){ 
+      const unlockedCount = countUnlocked();
+      let text = '硬币未进入有效蓝色区域，得 0 分。\n\n';
+      text += `已解锁 ${unlockedCount}/6 个奖项。`;
+      if(unlockedCount < 6) text += '\n继续投掷尝试新的区域吧！';
+      else text += '\n你已收集全部奖项';
+
+      resultTitle.textContent = '未命中';
+      resultText.textContent = text;
+      resEl.classList.add('show');
+      spawnParticles(stage.clientWidth/2 + (Math.random()-0.5)*80, stage.clientHeight/2 + 40, 8, 'splash');
+      renderPrizeStatus();
+      updateButtons();
+    }
+    function resetScene(){ activeCoin=null; particles=[]; powerFill.style.width='0%'; }
+
+    function updateButtons(){ 
+      retryBtn.onclick = null;
+      continueBtn.onclick = null;
+
+      if(allCollected()){
+        retryBtn.textContent = '重新开始';
+        continueBtn.textContent = '其他游戏';
+        retryBtn.onclick = ()=>{ 
+          resEl.classList.remove('show'); 
+          resetScene(); 
+        };
+        continueBtn.onclick = ()=>{ 
+          try{
+            if(typeof unlockAchievement === 'function'){
+              unlockAchievement(8, 'index1.html');
+            } else {
+              window.location.href = 'index1.html';
+            }
+          }catch(e){
+            window.location.href = 'index1.html';
+          }
+        };
+      } else {
+        retryBtn.textContent = '再来一次';
+        continueBtn.textContent = '其他游戏';
+        retryBtn.onclick = ()=>{ 
+          resEl.classList.remove('show'); 
+          resetScene(); 
+        };
+        continueBtn.onclick = ()=>{ 
+          window.location.href = 'index1.html'; 
+        };
+      }
+    }
+
+    // 首次载入与初始化
+    window.addEventListener('load', ()=>{
+      resizeCanvas();
+      if(fountainImg.complete) imgCtx.drawImage(fountainImg, 0, 0, imgCanvas.width, imgCanvas.height);
+      updateButtons();
+      renderPrizeStatus();
+      console.log('Fountain storage key:', getPerUserKey(), 'currentUser:', getCurrentUser());
+
+      // 保证 modal 可见并阻塞交互（modalOpen = true 已设）
+      document.getElementById('modalBackdrop').style.display = 'block';
+      document.getElementById('welcomeModal').style.display = 'flex';
+    });
+
+    // 监听图片/舞台尺寸变化重新绘制 offscreen
+    const ro = new ResizeObserver(()=>{ resizeCanvas(); if(fountainImg.complete) imgCtx.drawImage(fountainImg, 0, 0, imgCanvas.width, imgCanvas.height); });
+    ro.observe(stage);
+    fountainImg.addEventListener('load', ()=>{ imgCtx.drawImage(fountainImg, 0, 0, imgCanvas.width, imgCanvas.height); });
+
+    // 允许点击舞台设定目标点（备用）
+    stage.addEventListener('click', (e)=>{ lastPointer = getRelPos(e); });
+
+    // 设置按钮：显示/隐藏 settingsOverlay
+    toggleSettingsBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const shown = settingsOverlay.style.display === 'block';
+      settingsOverlay.style.display = shown ? 'none' : 'block';
+      settingsOverlay.setAttribute('aria-hidden', shown ? 'true' : 'false');
+    });
+
+    // 点击遮罩外部隐藏设置（可选）
+    document.addEventListener('click', (e)=>{
+      if(!settingsOverlay.contains(e.target) && e.target !== toggleSettingsBtn){
+        settingsOverlay.style.display = 'none';
+        settingsOverlay.setAttribute('aria-hidden', 'true');
+      }
+    });
+
+    // 欢迎弹窗关闭逻辑（手动关闭后解除锁定）
+    const closeWelcome = document.getElementById('closeWelcome');
+    closeWelcome.addEventListener('click', ()=>{
+      modalOpen = false;
+      document.getElementById('modalBackdrop').style.display = 'none';
+      document.getElementById('welcomeModal').style.display = 'none';
+      // 关闭后重新绘制 offscreen（确保像素数据就绪）
+      resizeCanvas();
+      if(fountainImg.complete) imgCtx.drawImage(fountainImg, 0, 0, imgCanvas.width, imgCanvas.height);
+    });
+
+    // 点击遮罩也不允许关闭（必须用按钮关闭）
+    document.getElementById('modalBackdrop').addEventListener('click', (e)=>{ e.stopPropagation(); });
+
+  </script>
+  <script src="../achievements.js"></script>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/我想保护你.mp3" autoplay loop muted></audio>
+  <script>
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>

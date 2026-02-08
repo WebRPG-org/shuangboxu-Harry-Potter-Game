@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>任务介绍1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: "KaiTi", "Microsoft YaHei", sans-serif;
+      background: url("../images/fail3.png") no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+    }
+
+    /* 左上角返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      text-decoration: none;
+      color: #fff;
+      font-size: 18px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 30px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: 0.3s;
+      backdrop-filter: blur(4px);
+    }
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* 顶部图片 */
+    .top-img {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      margin-top: 60px; /* 让图片不顶着最上面 */
+    }
+    .top-img img {
+      width: 40%; /* 缩小一点 */
+      border-radius: 16px;
+      border: 6px solid #ffc400; /* 相框边框 */
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+      object-fit: cover;
+      background: #fff; /* 防止透明边缘不好看 */
+    }
+
+    /* 文本框 */
+    .text-box {
+      margin: 20px;
+      padding: 24px;
+      text-align: center;
+      font-size: 22px;
+      line-height: 1.8;
+      color: #fceaea;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 18px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      border: 2px solid rgba(255, 80, 80, 0.6);
+      backdrop-filter: blur(6px);
+    }
+
+    .text-box p {
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上角返回按钮 -->
+<a class="back-btn" href="javascript:void(0);" 
+   onclick="unlockCharacter(1, '../introduction.html')">返回菜单</a>
+
+
+  <!-- 顶部图片 -->
+  <div class="top-img">
+    <img src="../images/3.jpg" alt="人物相框">
+  </div>
+
+  <!-- 文本内容 -->
+  <div class="text-box">
+    <p>未能成功绘制活点地图，</p>
+    <p>反而因为多次违纪被扣分，遭到麦格教授严厉批评，</p>
+    <p>被罚打扫公共休息室整整一个学期，</p>
+    <p>邓布利多对你的信任度骤降，莉莉的好感也清零，格兰芬多因此大比分落后。</p>
+  </div>
+
+  <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/The Killing Of Dumbledore.mp3" autoplay loop></audio>
+
+  <script src="../introduction.js"></script>
+</body>
+</html>

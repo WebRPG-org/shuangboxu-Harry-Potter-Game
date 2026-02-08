@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Harry Potter Themed Battle — Big Boss (Enhanced Skills)</title>
+  <style>
+    html,body{height:100%;margin:0;background:#12121a;display:flex;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#fff}
+    #gameWrap { display:flex; flex-direction:column; align-items:center; margin-top:80px; }
+    canvas{background:#062b12;image-rendering:pixelated;border:6px solid rgba(255,255,255,0.04);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+    .hud { margin-top:8px; display:flex; justify-content:center; gap:12px; align-items:center; flex-wrap:wrap; }
+    .bar{background:#222;padding:8px;border-radius:8px;display:flex;flex-direction:column;gap:6px}
+    .hpTrack{width:300px;height:12px;background:#333;border-radius:8px;overflow:hidden}
+    .hpInner{height:100%;background:linear-gradient(90deg,#0f0,#0a8);width:100%;}
+    .hpInnerEnemy { height:100%; background:linear-gradient(90deg, #f00, #800); width:100%; }
+    /* .msg { position:absolute; top:40%; left:50%; transform: translate(-50%,-50%); background: rgba(0,0,0,0.8); color:#fff; padding:20px 30px; border-radius:12px; font-size:20px; font-weight:bold; text-align:center; z-index:9999; display:none; } */
+     .msg {
+      position:absolute;
+      top:20px;         /* 改成靠顶部 */
+      left:50%;
+      transform: translateX(-50%); /* 只做水平居中，不再垂直居中 */
+      background: rgba(0,0,0,0.8);
+      color:#fff;
+      padding:10px 20px;
+      border-radius:8px;
+      font-size:18px;
+      font-weight:bold;
+      text-align:center;
+      z-index:9999;
+      display:none;
+    }
+    
+    .game-title { text-align:center; font-size:28px; color:#f5f5f5; margin:12px 0; font-weight:bold; letter-spacing:2px; }
+    .controls{font-size:13px;color:#ddd; margin-top:6px}
+    .btns{margin-top:8px;display:flex;gap:8px}
+    .btn{background:#2b6;padding:6px 10px;border-radius:6px;color:#071;font-weight:700;cursor:pointer; user-select:none}
+    .btn.secondary{background:#444;color:#ddd}
+    .statusline{font-size:12px;color:#cfc;margin-top:6px}
+  </style>
+</head>
+<body>
+<div id="gameWrap"><br>
+  <h1 class="game-title">Harry Potter Themed Battle — Big Boss (Enhanced Skills)</h1>
+  <div style="position:relative">
+    <canvas id="c" width="600" height="600"></canvas>
+    <div id="message" class="msg" style="display:none"></div>
+  </div>
+
+  <div class="hud">
+    <div class="bar">
+      <div>Player HP:</div>
+      <div class="hpTrack"><div id="playerHP" class="hpInner" style="width:100%"></div></div>
+      <div style="font-size:12px;margin-top:2px" id="hpText">100 / 100</div>
+    </div>
+
+    <div class="bar">
+      <div>Boss HP:</div>
+      <div class="hpTrack"><div id="bossHP" class="hpInnerEnemy" style="width:100%"></div></div>
+      <div style="font-size:12px;margin-top:2px" id="bossHpText">— / —</div>
+    </div>
+
+    <div class="bar">
+      <div style="font-size:12px">Controls: Arrow keys / WASD to move, IJKL to fire (Up/Down/Left/Right). Fire cooldown 0.3s, player bullet cap 100.</div>
+    </div>
+  </div>
+
+  <div class="statusline" id="specialStatus"></div>
+
+  <div class="btns">
+    <div class="btn" id="restartBtn">Restart</div>
+    <div class="btn secondary" id="continueBtn">Give Up</div>
+  </div>
+</div>
+
+<script>
+/* === CONFIG (including enhanced skills) === */
+const cellCount = 15;
+const cellSize = 600 / cellCount;
+
+const CONFIG = {
+  playerMaxHp: 400,
+  playerDamage: 25,
+  playerMoveMsPerCell: 120,
+  player: {
+    fireCooldownMs: 300,
+    maxActiveBullets: 100
+  },
+  bullet: {
+    speed: 0.45,
+    enemySpeed: 0.28,
+    lifeFrames: 120,
+    homingSteer: 0.14
+  },
+  boss: {
+    hp: 450,
+    size: 2,
+    skillMinDelay: 1000,
+    skillMaxDelay: 2500,
+    burst: { count: 10, spread: Math.PI * 2, speed: 0.36, homing:true },
+    dash: { steps: 6, stepInterval: 90, speedCellsPerStep: 1.0, damage: 3 },
+    teleport: { margin:1 },
+    cone: { rays: 10, spread: Math.PI/3, speed: 0.6, damage: 14 },
+    summon: { count: 6, speed: 0.22, life: 240, damage: 12 },
+    shield: { duration: 1400, damageReduction: 0.5 },
+    minion: { minDelay: 5200, maxDelay: 10200, batchMin: 1, batchMax: 5 },
+
+    // Avada adjustments: slower, longer life (more visible)
+    avada: { speed: 0.36, damage: 400, life: 160, warnMs: 850, count: 1 },
+    legilimens: { durationMs: 3000 },        // control reversal
+    darkmark: { durationMs: 7000, radius: 1.6, dps: 18 }, // area damage
+    cruciatus: { durationMs: 2000 },         // root
+  },
+  enemy: {
+    maxCount: 20,
+    hp: 30,
+    contactDamage: 3,
+    moveSpeed: 0.05,
+    wanderTurnMs: 900,
+    shooterMoveSpeed: 0.12,
+    fireCooldownMs: 1100,
+    homingFireExtraCd: 300
+  },
+  enemyBulletDamage: 18,
+  playerMeleeDamage: 10
+};
+
+/* === State === */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const playerHPBar = document.getElementById('playerHP');
+const bossHPBar = document.getElementById('bossHP');
+const hpText = document.getElementById('hpText');
+const bossHpText = document.getElementById('bossHpText');
+const restartBtn = document.getElementById('restartBtn');
+const continueBtn = document.getElementById('continueBtn');
+const specialStatusEl = document.getElementById('specialStatus');
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function randPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function now(){ return performance.now(); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function gridToPx(gx,gy){ return { x: gx*cellSize + cellSize/2, y: gy*cellSize + cellSize/2 }; }
+
+const state = {
+  player: { x: cellCount-2, y: cellCount-2, animX: cellCount-2, animY: cellCount-2, hp: CONFIG.playerMaxHp, maxHp: CONFIG.playerMaxHp, dir:{x:-1,y:0}, moving:false, moveTarget:null, moveStartAt:0, moveEndAt:0, lastShotAt:0, controlReversedUntil:0, rootedUntil:0 },
+  bullets: [],
+  particles: [],
+  enemies: [],
+  keys: {},
+  running: true, win:false, lose:false,
+  boss: null,
+  fogs: [], // for Dark Mark fog zones
+  avadaWarnings: [] // avada warning queue
+};
+
+/* === Assets (kept as original paths) === */
+let images = {};
+let loadedImgs = 0, totalImgs = 3;
+function loadImg(key, src){
+  const img = new Image();
+  img.src = src;
+  img.onload = ()=>{ images[key]=img; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+  img.onerror = ()=>{ images[key]=null; loadedImgs++; if(loadedImgs===totalImgs) start(); };
+}
+loadImg('player','../images/01.png');
+loadImg('boss','../images/03.png');
+loadImg('minion','../images/02.png');
+
+/* === Boss creation & skills (spell functions) === */
+function createBoss(gx, gy){
+  const t = now();
+  const b = {
+    id: uid(),
+    x: gx, y: gy,
+    animX: gx, animY: gy,
+    size: CONFIG.boss.size,
+    hp: CONFIG.boss.hp, maxHp: CONFIG.boss.hp,
+    lastSkillAt: t,
+    nextSkillDelay: randInt(CONFIG.boss.skillMinDelay, CONFIG.boss.skillMaxDelay),
+    dashing: false, dashUntil: 0, dashStepsLeft: 0, dashDir: {x:0,y:0}, dashNextStepAt: 0,
+    shielded: false, shieldUntil: 0,
+    nextMinionAt: t + randInt(CONFIG.boss.minion.minDelay, CONFIG.boss.minion.maxDelay)
+  };
+  return b;
+}
+function scheduleNextBossSkill(b){
+  b.nextSkillDelay = randInt(CONFIG.boss.skillMinDelay, CONFIG.boss.skillMaxDelay);
+  b.lastSkillAt = now();
+}
+
+function bossDoSkill(b){
+  const r = randInt(1,100);
+  if(r <= 20) bossBurst(b);
+  else if(r <= 36) bossCone(b);
+  else if(r <= 52) bossSummon(b);
+  else if(r <= 66) bossAvada(b);
+  else if(r <= 74) bossLegilimens(b);
+  else if(r <= 84) bossDarkMark(b);
+  else if(r <= 90) bossCruciatus(b);
+  else if(r <= 95) bossDash(b);
+  else if(r <= 98) bossTeleport(b);
+  else bossShield(b);
+  scheduleNextBossSkill(b);
+}
+
+/* Basic skills (burst/cone/summon/teleport/dash/shield) */
+function bossBurst(b){
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const count = CONFIG.boss.burst.count;
+  for(let i=0;i<count;i++){
+    const ang = (i/count) * Math.PI*2 + (Math.random()-0.5)*0.2;
+    const vx = Math.cos(ang) * CONFIG.boss.burst.speed;
+    const vy = Math.sin(ang) * CONFIG.boss.burst.speed;
+    state.bullets.push({
+      id: uid(), x: centerX, y: centerY, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing: !!CONFIG.boss.burst.homing, homingStrength: CONFIG.bullet.homingSteer
+    });
+  }
+  spawnParticles(centerX, centerY, 16, 1.3, true);
+  showMessageTransient('Slytherin used Homing Barrage!', 900);
+}
+function bossCone(b){
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const px = state.player.x + 0.001, py = state.player.y + 0.001;
+  const baseAng = Math.atan2(py - centerY, px - centerX);
+  const rays = CONFIG.boss.cone.rays;
+  const half = CONFIG.boss.cone.spread / 2;
+  for(let i=0;i<rays;i++){
+    const t = i/(rays-1);
+    const ang = baseAng - half + t * (half*2) + (Math.random()-0.5)*0.06;
+    const vx = Math.cos(ang) * CONFIG.boss.cone.speed;
+    const vy = Math.sin(ang) * CONFIG.boss.cone.speed;
+    state.bullets.push({ id: uid(), x: centerX, y: centerY, vx, vy, life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.boss.cone.damage, homing:false });
+  }
+  spawnParticles(centerX, centerY, 14, 1.6, true);
+  showMessageTransient('Slytherin fired a Cone Blast!', 900);
+}
+function bossSummon(b){
+  const centerX = b.x + b.size/2;
+  const centerY = b.y + b.size/2;
+  const count = CONFIG.boss.summon.count;
+  for(let i=0;i<count;i++){
+    const ang = Math.random()*Math.PI*2;
+    const r = 0.6 + Math.random()*0.8;
+    const sx = centerX + Math.cos(ang)*r;
+    const sy = centerY + Math.sin(ang)*r;
+    state.bullets.push({ id: uid(), x: sx, y: sy, vx: 0, vy: 0, life: CONFIG.boss.summon.life, from:'enemy', damage: CONFIG.boss.summon.damage, homing:true, homingStrength: 0.06, isMinion:true });
+  }
+  spawnParticles(centerX, centerY, 20, 1.8, true);
+  showMessageTransient('Slytherin summoned homing orbs!', 900);
+}
+function bossTeleport(b){
+  const margin = CONFIG.boss.teleport.margin;
+  let attempts = 0;
+  let nx, ny;
+  do{
+    nx = randInt(margin, cellCount - b.size - margin);
+    ny = randInt(margin, cellCount - b.size - margin);
+    attempts++;
+    const dist = Math.hypot(nx - state.player.x, ny - state.player.y);
+    if(dist > cellCount/3) break;
+  } while(attempts < 40);
+  spawnRing(b.x + b.size/2, b.y + b.size/2, b.size*0.9, 24);
+  b.x = nx; b.y = ny;
+  b.animX = b.x; b.animY = b.y;
+  spawnParticles(b.x + b.size/2, b.y + b.size/2, 30, 1.5, true);
+  showMessageTransient('Slytherin Teleported!', 700);
+}
+function bossDash(b){
+  const dx = Math.sign(state.player.x - (b.x + b.size/2));
+  const dy = Math.sign(state.player.y - (b.y + b.size/2));
+  let dir = {x: dx, y: dy};
+  if(dir.x === 0 && dir.y === 0){
+    const r = randInt(0,3);
+    dir = (r===0?{x:1,y:0}:r===1?{x:-1,y:0}:r===2?{x:0,y:1}:{x:0,y:-1});
+  }
+  b.dashing = true;
+  b.dashStepsLeft = CONFIG.boss.dash.steps;
+  b.dashDir = dir;
+  b.dashNextStepAt = now() + 20;
+  showMessageTransient('Slytherin Dash!', 700);
+}
+function bossShield(b){
+  b.shielded = true;
+  b.shieldUntil = now() + CONFIG.boss.shield.duration;
+  spawnParticles(b.x + b.size/2, b.y + b.size/2, 22, 1.6, true);
+  showMessageTransient('Slytherin activated a Shield!', 900);
+}
+
+/* === New skill: Avada (warning first, then fire) === */
+function bossAvada(b){
+  const cx = b.x + b.size/2, cy = b.y + b.size/2;
+  const count = CONFIG.boss.avada.count || 1;
+  const angleToPlayer = Math.atan2(state.player.y - cy, state.player.x - cx);
+  const warnMs = CONFIG.boss.avada.warnMs || 800;
+  const createdAt = now();
+  const fireAt = createdAt + warnMs;
+  for(let i=0;i<count;i++){
+    const spread = (Math.random()-0.5)*0.06;
+    state.avadaWarnings.push({
+      id: uid(),
+      x: cx, y: cy,
+      angle: angleToPlayer + spread,
+      createdAt,
+      fireAt,
+      count: randInt(1,2)
+    });
+  }
+  showMessageTransient('Warning! Slytherin is charging Avada Kedavra!', warnMs);
+  spawnParticles(cx, cy, 18, 1.0, true);
+}
+
+function fireAvadaWarning(warn){
+  const cx = warn.x, cy = warn.y;
+  const cnt = warn.count || 1;
+  for(let k=0;k<cnt;k++){
+    const ang = warn.angle + (Math.random()-0.5)*0.08;
+    const vx = Math.cos(ang) * CONFIG.boss.avada.speed;
+    const vy = Math.sin(ang) * CONFIG.boss.avada.speed;
+    state.bullets.push({
+      id: uid(), x: cx, y: cy, vx, vy, life: CONFIG.boss.avada.life, from:'enemy', damage: CONFIG.boss.avada.damage, avada:true
+    });
+  }
+  spawnParticles(cx, cy, 26, 1.6, true);
+  showMessageTransient('Avada fired!', 700);
+}
+
+/* Legilimens — reverse controls briefly */
+function bossLegilimens(b){
+  const dur = CONFIG.boss.legilimens.durationMs;
+  state.player.controlReversedUntil = now() + dur;
+  showMessageTransient('Legilimens — controls reversed!', 1100);
+  spawnParticles(state.player.x, state.player.y, 20, 1.2, true);
+}
+
+/* Dark Mark — spawn fog area that deals damage over time */
+function bossDarkMark(b){
+  const margin = 1;
+  const gx = randInt(margin, cellCount - margin - 1);
+  const gy = randInt(margin, cellCount - margin - 1);
+  const dur = CONFIG.boss.darkmark.durationMs;
+  const radius = CONFIG.boss.darkmark.radius;
+  state.fogs.push({ x: gx + 0.5, y: gy + 0.5, radius, until: now() + dur });
+  spawnParticles(gx + 0.5, gy + 0.5, 28, 1.2, false);
+  showMessageTransient('Dark Mark — shadow fog appears!', 1000);
+}
+
+/* Cruciatus — root player */
+function bossCruciatus(b){
+  const dur = CONFIG.boss.cruciatus.durationMs;
+  state.player.rootedUntil = now() + dur;
+  showMessageTransient('Cruciatus! You are rooted...', 1000);
+  spawnParticles(state.player.x, state.player.y, 26, 1.3, true);
+}
+
+/* === Spawn minions near boss === */
+function spawnMinionNearBoss(){
+  if(!state.boss) return;
+  if(state.enemies.length >= CONFIG.enemy.maxCount) return;
+
+  const b = state.boss;
+  const cx = b.x + b.size/2;
+  const cy = b.y + b.size/2;
+
+  const ang = Math.random()*Math.PI*2;
+  const r = 2 + Math.random()*2.5;
+  let x = clamp(cx + Math.cos(ang)*r, 0.5, cellCount-0.5);
+  let y = clamp(cy + Math.sin(ang)*r, 0.5, cellCount-0.5);
+
+  const type = randPick(['chaser','wander','shooter_homing','shooter_straight']);
+  const nowT = now();
+  const enemy = {
+    id: uid(),
+    type,
+    x, y, animX: x, animY: y,
+    hp: CONFIG.enemy.hp, maxHp: CONFIG.enemy.hp,
+    dir: {x: (Math.random()<0.5?-1:1), y:0},
+    nextThinkAt: nowT + randInt(400,900),
+    nextFireAt: nowT + randInt(600,1200),
+    lastMoveDir: {x:1,y:0},
+  };
+  state.enemies.push(enemy);
+}
+function bossTrySpawnMinions(b){
+  const t = now();
+  if(t >= b.nextMinionAt){
+    const n = randInt(CONFIG.boss.minion.batchMin, CONFIG.boss.minion.batchMax);
+    for(let i=0;i<n;i++) spawnMinionNearBoss();
+    b.nextMinionAt = t + randInt(CONFIG.boss.minion.minDelay, CONFIG.boss.minion.maxDelay);
+    showMessageTransient('Slytherin called reinforcements!', 700);
+  }
+}
+
+/* === Particles & transient messages === */
+function spawnParticles(gx, gy, n, speedScale=1, bright=false){
+  const base = gridToPx(gx, gy);
+  for(let i=0;i<n;i++){
+    const ang = Math.random()*Math.PI*2;
+    const sp = Math.random()*2*speedScale;
+    state.particles.push({ x: base.x, y: base.y, vx: Math.cos(ang)*sp*0.06, vy: Math.sin(ang)*0.06 - 0.2, life: randInt(12,40), bright });
+  }
+}
+function spawnRing(gx, gy, radius, count=24){
+  const base = gridToPx(gx,gy);
+  for(let i=0;i<count;i++){
+    const ang = (i/count)*Math.PI*2;
+    const r = (radius * cellSize) * (0.9 + Math.random()*0.25);
+    state.particles.push({ x: base.x + Math.cos(ang)*r, y: base.y + Math.sin(ang)*r, vx: Math.cos(ang)*0.02, vy: Math.sin(ang)*0.02, life: 36, bright: true });
+  }
+}
+function showMessageTransient(txt, ms=800){
+  messageEl.textContent = txt;
+  messageEl.style.display = 'block';
+  clearTimeout(messageEl._hideTimer);
+  messageEl._hideTimer = setTimeout(()=>{ messageEl.style.display = 'none'; }, ms);
+}
+
+/* === Player input (handles reversal & root) === */
+let lastKeyMoveAt = 0;
+const keyRepeatMs = 120;
+
+function attachEvents(){
+  window.addEventListener('keydown', e=>{
+    const kRaw = e.key;
+    const k = kRaw.toLowerCase();
+    state.keys[k] = true;
+
+    if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
+      tryMoveByKey(k);
+    }
+
+    if(k === 'i' || k === 'k' || k === 'j' || k === 'l'){
+      let dir;
+      if(k === 'i') dir = {x:0,y:-1};
+      if(k === 'k') dir = {x:0,y:1};
+      if(k === 'j') dir = {x:-1,y:0};
+      if(k === 'l') dir = {x:1,y:0};
+      if(now() < state.player.controlReversedUntil){
+        dir = { x: -dir.x, y: -dir.y };
+      }
+      playerShoot(dir);
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', e=>{
+    state.keys[e.key.toLowerCase()] = false;
+  });
+
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.addEventListener('click', failHandler);
+}
+
+function tryMoveByKey(k){
+  const t = now();
+  if(t < state.player.rootedUntil){
+    showMessageTransient("You're rooted and cannot move!", 500);
+    return;
+  }
+  if(state.player.moving && t < state.player.moveEndAt) return;
+  if(t - lastKeyMoveAt < 40) return;
+  lastKeyMoveAt = t;
+  let dx=0, dy=0;
+  if(k==='arrowup'||k==='w') dy=-1;
+  if(k==='arrowdown'||k==='s') dy=1;
+  if(k==='arrowleft'||k==='a') dx=-1;
+  if(k==='arrowright'||k==='d') dx=1;
+  if(dx===0 && dy===0) return;
+
+  if(t < state.player.controlReversedUntil){
+    dx = -dx; dy = -dy;
+  }
+
+  const tx = clamp(state.player.x + dx, 0, cellCount-1);
+  const ty = clamp(state.player.y + dy, 0, cellCount-1);
+  if(tx===state.player.x && ty===state.player.y) return;
+  state.player.moveTarget = {x:tx,y:ty};
+  state.player.moving = true;
+  state.player.moveStartAt = now();
+  state.player.moveEndAt = state.player.moveStartAt + CONFIG.playerMoveMsPerCell;
+  state.player.dir = {x: Math.sign(dx), y: Math.sign(dy)};
+}
+
+/* Player shooting (cooldown & cap) */
+function playerShoot(dir){
+  if(!state.running) return;
+  const t = now();
+  if(t - state.player.lastShotAt < CONFIG.player.fireCooldownMs){
+    return;
+  }
+  let activePlayerBullets = 0;
+  for(const b of state.bullets) if(b.from === 'player') activePlayerBullets++;
+  if(activePlayerBullets >= CONFIG.player.maxActiveBullets){
+    showMessageTransient('Bullet limit reached!', 500);
+    return;
+  }
+
+  state.player.lastShotAt = t;
+  let d = dir || state.player.dir || {x:0,y:-1};
+  const start = { x: state.player.x + d.x*0.5, y: state.player.y + d.y*0.5 };
+  state.bullets.push({
+    id: uid(), x: start.x, y: start.y, vx: d.x * CONFIG.bullet.speed, vy: d.y * CONFIG.bullet.speed, life: CONFIG.bullet.lifeFrames, from:'player', damage: CONFIG.playerDamage
+  });
+  spawnParticles(state.player.x, state.player.y, 6, 0.6);
+}
+
+/* === Start === */
+function populateBoss(){
+  const gx = Math.floor((cellCount - CONFIG.boss.size)/2);
+  const gy = Math.floor((cellCount - CONFIG.boss.size)/3);
+  state.boss = createBoss(gx, gy);
+  scheduleNextBossSkill(state.boss);
+}
+function start(){
+  populateBoss();
+  attachEvents();
+  restartBtn.onclick = ()=> location.reload();
+  requestAnimationFrame(loop);
+}
+
+/* === Collision / damage === */
+function applyDamageToPlayer(dmg){
+  state.player.hp -= dmg;
+  spawnParticles(state.player.x, state.player.y, 8, 0.8, true);
+  if(state.player.hp <= 0) { state.player.hp = 0; lose(); }
+}
+function checkBulletHitBoss(bullet, boss){
+  if(!boss) return false;
+  return (bullet.x >= boss.x - 0.3 && bullet.x <= boss.x + boss.size - 0.3 &&
+          bullet.y >= boss.y - 0.3 && bullet.y <= boss.y + boss.size - 0.3);
+}
+function playerOverlapsBoss(player, boss){
+  if(!boss) return false;
+  return (player.x >= boss.x - 0.5 && player.x <= boss.x + boss.size - 0.5 &&
+          player.y >= boss.y - 0.5 && player.y <= boss.y + boss.size - 0.5);
+}
+
+/* === Main loop === */
+let last = performance.now();
+function loop(nowTime){
+  const dtMs = Math.min(40, nowTime - last);
+  last = nowTime;
+  if(state.running){
+    update(dtMs);
+    render();
+  }
+  if(!state.win && !state.lose) requestAnimationFrame(loop);
+}
+
+/* === Update (including fog damage, bullets, avada warnings) === */
+function update(dtMs){
+  const t = now();
+
+  if(state.keys['arrowup']||state.keys['w']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowup'); }
+  if(state.keys['arrowdown']||state.keys['s']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowdown'); }
+  if(state.keys['arrowleft']||state.keys['a']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowleft'); }
+  if(state.keys['arrowright']||state.keys['d']){ if(!state.player.moving && t - lastKeyMoveAt > keyRepeatMs) tryMoveByKey('arrowright'); }
+
+  if(state.player.moving && state.player.moveTarget){
+    const start = state.player.moveStartAt;
+    const end = state.player.moveEndAt;
+    const ratio = Math.min(1, Math.max(0, (t - start) / (end - start)));
+    state.player.animX = state.player.x + (state.player.moveTarget.x - state.player.x) * ratio;
+    state.player.animY = state.player.y + (state.player.moveTarget.y - state.player.y) * ratio;
+    if(ratio >= 1){
+      state.player.x = state.player.moveTarget.x;
+      state.player.y = state.player.moveTarget.y;
+      state.player.animX = state.player.x; state.player.animY = state.player.y;
+      state.player.moving = false; state.player.moveTarget = null;
+    }
+  } else {
+    state.player.animX += (state.player.x - state.player.animX) * 0.25;
+    state.player.animY += (state.player.y - state.player.animY) * 0.25;
+  }
+
+  const b = state.boss;
+  if(b){
+    if(b.shielded && now() > b.shieldUntil){ b.shielded = false; showMessageTransient('Boss shield expired'); }
+
+    if(b.dashing && b.dashStepsLeft > 0 && t >= b.dashNextStepAt){
+      const stepCells = Math.max(1, Math.round(CONFIG.boss.dash.speedCellsPerStep));
+      for(let s=0;s<stepCells;s++){
+        const nx = clamp(b.x + b.dashDir.x, 0, cellCount - b.size);
+        const ny = clamp(b.y + b.dashDir.y, 0, cellCount - b.size);
+        if(nx === b.x && ny === b.y) break;
+        b.x = nx; b.y = ny;
+      }
+      b.animX += (b.x - b.animX) * 0.6;
+      b.animY += (b.y - b.animY) * 0.6;
+      if(playerOverlapsBoss(state.player, b)){
+        applyDamageToPlayer(CONFIG.boss.dash.damage);
+      }
+      b.dashStepsLeft--;
+      b.dashNextStepAt = t + CONFIG.boss.dash.stepInterval;
+      if(b.dashStepsLeft <= 0){ b.dashing = false; }
+    } else {
+      b.animX += (b.x - b.animX) * 0.18;
+      b.animY += (b.y - b.animY) * 0.18;
+    }
+
+    if(t - b.lastSkillAt >= b.nextSkillDelay){ bossDoSkill(b); }
+    bossTrySpawnMinions(b);
+  }
+
+  // avada warnings processing
+  for(let i = state.avadaWarnings.length - 1; i >= 0; i--){
+    const warn = state.avadaWarnings[i];
+    const remaining = warn.fireAt - now();
+    if(remaining <= 300 && remaining > 0){
+      const px = warn.x + Math.cos(warn.angle) * (Math.max(0, (CONFIG.boss.avada.warnMs - remaining)/CONFIG.boss.avada.warnMs) * (cellCount*0.6));
+      const py = warn.y + Math.sin(warn.angle) * (Math.max(0, (CONFIG.boss.avada.warnMs - remaining)/CONFIG.boss.avada.warnMs) * (cellCount*0.6));
+      spawnParticles(px, py, 2, 0.6, true);
+    }
+    if(now() >= warn.fireAt){
+      fireAvadaWarning(warn);
+      state.avadaWarnings.splice(i,1);
+    }
+  }
+
+  for(let i = state.bullets.length - 1; i >= 0; i--){
+    const bl = state.bullets[i];
+
+    if(bl.from === 'enemy' && bl.homing){
+      if(Math.floor(performance.now()/120) !== Math.floor((performance.now()-dtMs)/120)){
+        const px = state.player.x, py = state.player.y;
+        const dx = px - bl.x, dy = py - bl.y;
+        const mag = Math.hypot(dx,dy) || 1;
+        const speed = (bl.isMinion ? CONFIG.boss.summon.speed : (bl.avada ? CONFIG.boss.avada.speed : CONFIG.bullet.enemySpeed));
+        const desiredVx = (dx/mag) * speed;
+        const desiredVy = (dy/mag) * speed;
+        const steer = (bl.homingStrength || CONFIG.bullet.homingSteer);
+        bl.vx += (desiredVx - bl.vx) * steer;
+        bl.vy += (desiredVy - bl.vy) * steer;
+        const s = Math.hypot(bl.vx, bl.vy) || 1;
+        bl.vx = (bl.vx / s) * speed;
+        bl.vy = (bl.vy / s) * speed;
+      }
+    }
+
+    bl.x += bl.vx * (dtMs/16.67);
+    bl.y += bl.vy * (dtMs/16.67);
+    bl.life--;
+    if(bl.life <= 0 || bl.x < -2 || bl.x > cellCount+2 || bl.y < -2 || bl.y > cellCount+2){
+      state.bullets.splice(i,1); continue;
+    }
+
+    if(bl.from === 'player'){
+      if(state.boss && checkBulletHitBoss(bl, state.boss)){
+        const damageApplied = state.boss.shielded ? Math.max(1, Math.round(bl.damage * (1 - CONFIG.boss.shield.damageReduction))) : bl.damage;
+        state.boss.hp -= damageApplied;
+        spawnParticles(bl.x, bl.y, 10, 1.2);
+        state.bullets.splice(i,1);
+        if(state.boss.hp <= 0){ state.boss.hp = 0; state.boss = null; win(); }
+        continue;
+      }
+      let hitEnemyIndex = -1;
+      for(let ei=0; ei<state.enemies.length; ei++){
+        const e = state.enemies[ei];
+        if(Math.hypot(e.x - bl.x, e.y - bl.y) < 0.65){
+          hitEnemyIndex = ei; break;
+        }
+      }
+      if(hitEnemyIndex >= 0){
+        const e = state.enemies[hitEnemyIndex];
+        e.hp -= bl.damage;
+        spawnParticles(e.x, e.y, 8, 1.0, true);
+        state.bullets.splice(i,1);
+        if(e.hp <= 0){ state.enemies.splice(hitEnemyIndex,1); }
+        continue;
+      }
+    } else {
+      if(Math.hypot(state.player.x - bl.x, state.player.y - bl.y) < 0.75){
+        applyDamageToPlayer(bl.damage);
+        spawnParticles(state.player.x, state.player.y, 10, 1.0);
+        state.bullets.splice(i,1);
+        continue;
+      }
+    }
+  }
+
+  for(let ei = state.enemies.length-1; ei >= 0; ei--){
+    const e = state.enemies[ei];
+
+    let mvx = 0, mvy = 0;
+    const baseMs = (e.type.startsWith('shooter') ? CONFIG.enemy.shooterMoveSpeed : CONFIG.enemy.moveSpeed);
+    const step = baseMs * (dtMs/16.67);
+
+    if(e.type === 'chaser'){
+      const dx = state.player.x - e.x;
+      const dy = state.player.y - e.y;
+      const dist = Math.hypot(dx,dy) || 1;
+      mvx = (dx/dist) * step;
+      mvy = (dy/dist) * step;
+      e.lastMoveDir = {x: Math.sign(dx)||e.lastMoveDir.x, y: Math.sign(dy)||e.lastMoveDir.y};
+    } else if(e.type === 'wander'){
+      if(now() >= e.nextThinkAt){
+        e.dir = randPick([{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1},{x:0,y:0}]);
+        e.nextThinkAt = now() + CONFIG.enemy.wanderTurnMs + randInt(-200,200);
+      }
+      mvx = e.dir.x * step; mvy = e.dir.y * step;
+      e.lastMoveDir = {x: e.dir.x || e.lastMoveDir.x, y: e.dir.y || e.lastMoveDir.y};
+    } else if(e.type === 'shooter_homing' || e.type === 'shooter_straight'){
+      if(e.type === 'shooter_homing'){
+        const dx = state.player.x - e.x;
+        const dy = state.player.y - e.y;
+        const dist = Math.hypot(dx,dy) || 1;
+        mvx = (dx/dist) * step*0.6;
+        mvy = (dy/dist) * step*0.6;
+        e.lastMoveDir = {x: Math.sign(dx)||e.lastMoveDir.x, y: Math.sign(dy)||e.lastMoveDir.y};
+      }else{
+        if(now() >= e.nextThinkAt){
+          e.dir = randPick([{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]);
+          e.nextThinkAt = now() + randInt(800,1400);
+        }
+        mvx = (e.dir?.x||0) * step;
+        mvy = (e.dir?.y||0) * step;
+        e.lastMoveDir = {x: (e.dir?.x||0) || e.lastMoveDir.x, y: (e.dir?.y||0) || e.lastMoveDir.y};
+      }
+    }
+
+    e.x = clamp(e.x + mvx, 0.5, cellCount-0.5);
+    e.y = clamp(e.y + mvy, 0.5, cellCount-0.5);
+    e.animX += (e.x - e.animX) * 0.35;
+    e.animY += (e.y - e.animY) * 0.35;
+
+    if((e.type === 'shooter_homing' || e.type === 'shooter_straight') && now() >= e.nextFireAt){
+      if(e.type === 'shooter_homing'){
+        const speed = CONFIG.bullet.enemySpeed*0.8;
+        const dx = state.player.x - e.x, dy = state.player.y - e.y;
+        const dist = Math.hypot(dx,dy) || 1;
+        state.bullets.push({
+          id: uid(), x: e.x, y: e.y,
+          vx: (dx/dist) * speed * 0.6, vy: (dy/dist) * speed * 0.6,
+          life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing:true
+        });
+        e.nextFireAt = now() + CONFIG.enemy.fireCooldownMs + CONFIG.enemy.homingFireExtraCd + randInt(-150,250);
+      } else {
+        const d = e.lastMoveDir || {x:1,y:0};
+        const vx = d.x * CONFIG.bullet.enemySpeed;
+        const vy = d.y * CONFIG.bullet.enemySpeed;
+        state.bullets.push({
+          id: uid(), x: e.x, y: e.y, vx, vy,
+          life: CONFIG.bullet.lifeFrames, from:'enemy', damage: CONFIG.enemyBulletDamage, homing:false
+        });
+        e.nextFireAt = now() + CONFIG.enemy.fireCooldownMs + randInt(-150,250);
+      }
+      spawnParticles(e.x, e.y, 5, 0.8);
+    }
+
+    if(Math.hypot(state.player.x - e.x, state.player.y - e.y) < 0.7){
+      applyDamageToPlayer(CONFIG.enemy.contactDamage);
+    }
+  }
+
+  for(let i=state.particles.length-1;i>=0;i--){
+    const p = state.particles[i];
+    p.life--;
+    p.x += p.vx * (dtMs/16.67);
+    p.y += p.vy * (dtMs/16.67);
+    p.vy += 0.01;
+    if(p.life <= 0) state.particles.splice(i,1);
+  }
+
+  for(let i = state.fogs.length - 1; i >= 0; i--){
+    const f = state.fogs[i];
+    if(now() >= f.until){
+      state.fogs.splice(i,1);
+      continue;
+    }
+    const dx = state.player.x - f.x, dy = state.player.y - f.y;
+    const dist = Math.hypot(dx,dy);
+    if(dist <= f.radius){
+      const dmg = CONFIG.boss.darkmark.dps * (dtMs/1000);
+      applyDamageToPlayer(dmg);
+    }
+  }
+
+  playerHPBar.style.width = Math.max(0,(state.player.hp/state.player.maxHp)*300) + 'px';
+  hpText.textContent = Math.max(0, Math.round(state.player.hp)) + ' / ' + state.player.maxHp;
+  if(state.boss){
+    bossHPBar.style.width = Math.max(0,(state.boss.hp/state.boss.maxHp)*300) + 'px';
+    bossHpText.textContent = Math.max(0, Math.round(state.boss.hp)) + ' / ' + state.boss.maxHp;
+  } else {
+    bossHPBar.style.width = '0px';
+    bossHpText.textContent = '0 / 0';
+  }
+
+  let ss = [];
+  if(now() < state.player.controlReversedUntil) ss.push('Legilimens: controls reversed');
+  if(now() < state.player.rootedUntil) ss.push('Cruciatus: rooted');
+  if(state.fogs.length) ss.push('Dark Mark: ' + state.fogs.length + ' fog(s) active');
+  if(state.avadaWarnings.length) ss.push('Warning: Boss charging Avada ('+state.avadaWarnings.length+')');
+  specialStatusEl.textContent = ss.join('  |  ');
+}
+
+/* === Win / Lose === */
+function win(){
+  state.win = true;
+  showMessage('You win! Boss defeated 🎉');
+  render();
+  state.running = false;
+  restartBtn.textContent = "Play Again";
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.textContent = "Continue Game";
+  continueBtn.classList.remove('secondary');
+  continueBtn.addEventListener('click', successHandler);
+}
+function lose(){
+  if(state.lose) return;
+  state.lose = true;
+  showMessage('You were defeated... try again');
+  render();
+  state.running = false;
+  restartBtn.textContent = "Play Again";
+  restartBtn.onclick = ()=> location.reload();
+  continueBtn.removeEventListener('click', successHandler);
+  continueBtn.removeEventListener('click', failHandler);
+  continueBtn.textContent = "Quit";
+  continueBtn.classList.add('secondary');
+  continueBtn.addEventListener('click', failHandler);
+}
+function showMessage(txt){ messageEl.textContent = txt; messageEl.style.display = 'block'; }
+
+/* fail/success handler (for opener communication) */
+function successHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:true, action:"continue" }, "*"); } window.close(); }
+function failHandler(){ if(window.opener){ window.opener.postMessage({ type:"MiniGameResult", success:false, action:"giveup" }, "*"); } window.close(); }
+
+/* === Rendering (fog, Avada warnings, effects) === */
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(let i=0;i<cellCount;i++){
+    for(let j=0;j<cellCount;j++){
+      const x = i*cellSize, y = j*cellSize;
+      ctx.fillStyle = ((i+j)%2===0) ? '#0b6b1f' : '#0a5b17';
+      ctx.fillRect(x+1, y+1, cellSize-2, cellSize-2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)'; ctx.strokeRect(x+0.5, y+0.5, cellSize, cellSize);
+    }
+  }
+
+  state.fogs.forEach(f => {
+    const center = gridToPx(f.x, f.y);
+    const rpx = f.radius * cellSize;
+    const g = ctx.createRadialGradient(center.x, center.y, rpx*0.2, center.x, center.y, rpx);
+    g.addColorStop(0, 'rgba(10,10,10,0.6)');
+    g.addColorStop(1, 'rgba(0,0,0,0.9)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, rpx, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = 'rgba(40,10,40,0.08)';
+    ctx.beginPath(); ctx.arc(center.x, center.y, rpx*1.1, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+
+  state.particles.forEach(p=>{
+    if(p.text){
+      ctx.font = "14px serif";
+      ctx.fillStyle = "rgba(255,255,255," + (p.life/30) + ")";
+      ctx.fillText(p.text, p.x, p.y);
+    } else {
+      ctx.globalAlpha = Math.max(0, p.life/36);
+      ctx.fillStyle = p.bright ? 'rgba(255,240,200,0.95)' : 'rgba(255,255,255,0.9)';
+      ctx.fillRect(p.x-2, p.y-2, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  // Draw Avada warning beams (charge visualization)
+  for(const warn of state.avadaWarnings){
+    const center = gridToPx(warn.x, warn.y);
+    const ang = warn.angle;
+    const maxLen = Math.max(canvas.width, canvas.height) * 0.9;
+    const ex = center.x + Math.cos(ang) * maxLen;
+    const ey = center.y + Math.sin(ang) * maxLen;
+    const remain = Math.max(0, warn.fireAt - now());
+    const total = Math.max(1, CONFIG.boss.avada.warnMs);
+    const pulse = 0.5 + 0.5 * Math.sin((now()/150) * Math.PI * 2);
+    const alpha = clamp(0.12 + (1 - remain/total) * 0.7 + pulse*0.05, 0.12, 0.95);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const grd = ctx.createLinearGradient(center.x, center.y, ex, ey);
+    grd.addColorStop(0, 'rgba(40,220,60,'+alpha+')');
+    grd.addColorStop(0.6, 'rgba(40,180,60,'+(alpha*0.6)+')');
+    grd.addColorStop(1, 'rgba(40,120,40,0.02)');
+    ctx.strokeStyle = grd;
+    ctx.lineWidth = 6 + (1 - remain/total) * 8;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    ctx.beginPath();
+    const ringR = 8 + (1 - remain/total) * 18;
+    ctx.strokeStyle = 'rgba(255,220,160,' + (0.6 + pulse*0.2) + ')';
+    ctx.lineWidth = 3;
+    ctx.arc(center.x + Math.cos(ang) * (cellSize*0.6), center.y + Math.sin(ang) * (cellSize*0.6), ringR, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  state.bullets.forEach(b=>{
+    const px = b.x * cellSize, py = b.y * cellSize;
+    if(b.from === 'player'){
+      ctx.beginPath(); ctx.fillStyle = 'rgba(180,200,255,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    } else if(b.avada){
+      ctx.save();
+      ctx.translate(px, py);
+      const ang = Math.atan2(b.vy, b.vx);
+      ctx.rotate(ang);
+      ctx.globalAlpha = 0.98;
+      const len = 26 + Math.random()*6;
+      const grd = ctx.createLinearGradient(-len,0,len,0);
+      grd.addColorStop(0,'rgba(20,200,60,0.0)');
+      grd.addColorStop(0.15,'rgba(30,230,90,0.95)');
+      grd.addColorStop(0.5,'rgba(255,255,255,0.95)');
+      grd.addColorStop(0.85,'rgba(30,230,90,0.95)');
+      grd.addColorStop(1,'rgba(20,200,60,0.0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(-len, -5, len*2, 10);
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,255,220,0.98)';
+      ctx.arc(0,0,6,0,Math.PI*2);
+      ctx.fill();
+      ctx.shadowColor = 'rgba(100,255,120,0.8)';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = 'rgba(80,255,120,0.08)';
+      ctx.fillRect(-len, -12, len*2, 24);
+      ctx.restore();
+    } else if(b.isMinion){
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,220,120,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,180,160,0.95)'; ctx.arc(px, py, 6, 0, Math.PI*2); ctx.fill();
+    }
+    const grad = ctx.createRadialGradient(px, py, 2, px, py, 12);
+    if(b.from === 'player'){ grad.addColorStop(0, 'rgba(200,220,255,1)'); grad.addColorStop(1, 'rgba(80,120,255,0)'); }
+    else if(b.avada){ grad.addColorStop(0, 'rgba(160,255,150,1)'); grad.addColorStop(1, 'rgba(60,140,60,0)'); }
+    else { grad.addColorStop(0, 'rgba(255,200,180,1)'); grad.addColorStop(1, 'rgba(255,80,60,0)'); }
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = (b.from==='player')? '#bbf' : (b.isMinion? '#fb0' : '#f88'); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
+  });
+
+  if(state.boss){
+    const b = state.boss;
+    const px = b.animX * cellSize, py = b.animY * cellSize;
+    const w = cellSize * b.size, h = cellSize * b.size;
+    if(images.boss){ ctx.drawImage(images.boss, px+2, py+2, w-4, h-4); }
+    else {
+      const grad = ctx.createLinearGradient(px, py, px+w, py+h);
+      grad.addColorStop(0, '#8b1f1f'); grad.addColorStop(1, '#4b0f0f');
+      ctx.fillStyle = grad; ctx.fillRect(px+4, py+4, w-8, h-8);
+    }
+    if(b.shielded){
+      ctx.save();
+      ctx.globalAlpha = 0.65;
+      ctx.strokeStyle = 'rgba(120,200,255,0.9)';
+      ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(px + w/2, py + h/2, Math.max(w,h)*0.9, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#000'; ctx.fillRect(px, py-8, w, 6);
+    ctx.fillStyle = '#e33'; ctx.fillRect(px, py-8, Math.max(0, (b.hp/b.maxHp)*w), 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '12px sans-serif';
+    ctx.fillText('BOSS', px + 6, py + 14);
+  }
+
+  state.enemies.forEach(e => {
+    const ex = e.animX * cellSize, ey = e.animY * cellSize;
+    const size = cellSize * 0.9;
+    if (images.minion) {
+      ctx.drawImage(images.minion, ex - size/2 + 1, ey - size/2 + 1, size - 2, size - 2);
+    } else {
+      ctx.fillStyle = '#aa3';
+      ctx.fillRect(ex - size/2 + 2, ey - size/2 + 2, size - 4, size - 4);
+    }
+    const barX = ex - size / 2;
+    const barY = ey - size / 2 - 6;
+    const barW = size;
+    const barH = 4;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(barX, barY, barW, barH);
+    const w = clamp((e.hp / e.maxHp) * barW, 0, barW);
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(barX, barY, w, barH);
+    ctx.strokeStyle = '#800';
+    ctx.strokeRect(barX, barY, barW, barH);
+  });
+
+  const ppx = state.player.animX * cellSize, ppy = state.player.animY * cellSize;
+  if(images.player){ ctx.drawImage(images.player, ppx+2, ppy+2, cellSize-4, cellSize-4); }
+  else { ctx.fillStyle='#33a'; ctx.fillRect(ppx+4, ppy+4, cellSize-8, cellSize-8); }
+  ctx.fillStyle='#222'; ctx.fillRect(ppx+3, ppy+3, cellSize-6, 6);
+  ctx.fillStyle='#0a0'; ctx.fillRect(ppx+3, ppy+3, Math.max(0, (state.player.hp/state.player.maxHp)*(cellSize-6)), 6);
+}
+
+/* === Start safety === */
+if(totalImgs === 0) start();
+else { setTimeout(()=>{ if(loadedImgs < totalImgs && !state.boss) start(); }, 600); }
+
+/* === End === */
+</script>
+
+<!-- background music (kept same path) -->
+  <audio id="bgm" src="../musics/追求.mp3" autoplay loop muted></audio>
+  <script>
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("Auto-play blocked, user interaction required:", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>

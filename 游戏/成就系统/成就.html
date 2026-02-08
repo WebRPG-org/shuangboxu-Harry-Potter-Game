@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>成就系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background: url("../images/成就bg.png") no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow: hidden;
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #ffd700;
+      text-shadow: 1px 1px 2px #000;
+    }
+
+    /* 外层容器 - 3D 视角 */
+    .carousel-container {
+      position: relative;
+      width: 80%;
+      max-width: 800px;
+      perspective: 1200px;
+      overflow: hidden;
+    }
+
+    /* 滚动区域 */
+    .achievements {
+      display: flex;
+      transition: transform 0.6s ease;
+      transform-style: preserve-3d;
+    }
+
+    /* 卡片样式 */
+    .card {
+      flex: 0 0 250px;
+      margin: 0 15px;
+      background: rgba(0,0,0,0.6);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      text-align: center;
+      transition: transform 0.3s, box-shadow 0.3s;
+      transform: rotateY(0deg) scale(0.9);
+    }
+    .card.unlocked {
+      border: 2px solid #ffd700;
+    }
+    .card.active {
+      transform: rotateY(0deg) scale(1.1);
+      box-shadow: 0 12px 30px rgba(255, 215, 0, 0.8);
+    }
+    .card.left {
+      transform: rotateY(25deg) scale(0.9);
+    }
+    .card.right {
+      transform: rotateY(-25deg) scale(0.9);
+    }
+
+    /* 按钮 */
+    .btn {
+      margin: 10px;
+      padding: 10px 20px;
+      background: #ccff00;
+      color: #141e30;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .nav-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.3);
+      color: #fff;
+      font-size: 24px;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      cursor: pointer;
+      transition: background 0.3s;
+      z-index: 10;
+    }
+    .nav-btn:hover {
+      background: rgba(255,255,255,0.6);
+    }
+    .nav-left { left: 10px; }
+    .nav-right { right: 10px; }
+  </style>
+</head>
+<body>
+  <h1>🏆 我的成就</h1>
+  <div class="carousel-container">
+    <button class="nav-btn nav-left" onclick="prevCard()">❮</button>
+    <div id="achievements" class="achievements"></div>
+    <button class="nav-btn nav-right" onclick="nextCard()">❯</button>
+  </div>
+
+  <div>
+    <button class="btn" onclick="goBack()">返回</button>
+    <button class="btn" onclick="logout()">退出登录</button>
+  </div>
+
+  <script src="../achievements.js"></script>
+  <script>
+    const currentUser = localStorage.getItem("currentUser");
+    if(!currentUser){
+      alert("请先登录！");
+      window.location.href = "../login-register/login.html";
+    }
+
+    const userAchievements = JSON.parse(localStorage.getItem("achievements") || "{}");
+    const unlocked = userAchievements[currentUser] || [];
+
+    const container = document.getElementById("achievements");
+
+
+allAchievements.forEach((a, index) => {
+  const isUnlocked = unlocked.includes(a.id);
+  const card = document.createElement("div");
+  card.className = "card" + (isUnlocked ? " unlocked" : "");
+  card.innerHTML = `
+    <img src="../images/成就${index+1}.png" 
+         alt="${a.name}" 
+         style="width:100%; height:150px; object-fit:cover; border-radius:8px; margin-bottom:10px;">
+    <h3>${a.name}</h3>
+    <p>${a.desc}</p>
+    <p style="color:${isUnlocked ? '#ffd700':'#aaa'}">
+      ${isUnlocked ? "已解锁" : "未解锁"}
+    </p>
+  `;
+  container.appendChild(card);
+});
+
+    let currentIndex = 0;
+    updateCards();
+
+function updateCards(){
+  const cards = document.querySelectorAll(".card");
+  cards.forEach((c, i) => {
+    c.classList.remove("active", "left", "right");
+    if(i === currentIndex) c.classList.add("active");
+    else if(i === currentIndex - 1) c.classList.add("left");
+    else if(i === currentIndex + 1) c.classList.add("right");
+  });
+
+  const containerWidth = document.querySelector(".carousel-container").offsetWidth;
+  const currentCard = cards[currentIndex];
+
+  if(currentCard){
+    const cardCenter = currentCard.offsetLeft + currentCard.offsetWidth / 2;
+    const containerCenter = containerWidth / 2;
+    const offset = containerCenter - cardCenter;
+
+    container.style.transform = `translateX(${offset}px)`;
+  }
+}
+
+    function prevCard(){
+      if(currentIndex > 0){
+        currentIndex--;
+        updateCards();
+      }
+    }
+    function nextCard(){
+      if(currentIndex < container.children.length - 1){
+        currentIndex++;
+        updateCards();
+      }
+    }
+
+    // 键盘控制
+    document.addEventListener("keydown", (e) => {
+      if(e.key === "ArrowLeft") prevCard();
+      if(e.key === "ArrowRight") nextCard();
+    });
+
+    function logout(){
+      localStorage.removeItem("currentUser");
+      window.location.href = "../login-register/login.html";
+    }
+    function goBack(){
+      window.location.href = "../reality.html";
+    }
+  </script>
+
+    <!-- 背景音乐 -->
+  <audio id="bgm" src="../musics/Victory.mp3" autoplay loop muted></audio>
+  <script>
+    // 等待页面加载后尝试解除静音播放
+    window.addEventListener("load", function () {
+      const audio = document.getElementById("bgm");
+      // 延时解除静音，确保浏览器允许
+      setTimeout(() => {
+        audio.muted = false;
+        audio.play().catch(err => {
+          console.log("自动播放被拦截，需手动交互：", err);
+        });
+      }, 500);
+    });
+  </script>
+</body>
+</html>
